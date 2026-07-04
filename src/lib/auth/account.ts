@@ -28,7 +28,9 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { AUTH_DISABLED } from "@/lib/auth/mode";
 import { createClient } from "@/lib/supabase/server";
+import { DEMO_ACCOUNT, DEMO_PROFILE, DEMO_USER } from "@/lib/supabase/mock";
 import { hasMinRole, isAccountRole, type AccountRole } from "./roles";
 
 // ------------------------------------------------------------
@@ -105,6 +107,16 @@ export interface AccountContext {
  */
 export async function getCurrentAccount(): Promise<AccountContext> {
   const supabase = await createClient();
+
+  if (AUTH_DISABLED) {
+    return {
+      supabase,
+      userId: DEMO_USER.id,
+      accountId: DEMO_ACCOUNT.id,
+      role: "owner",
+      account: { id: DEMO_ACCOUNT.id, name: DEMO_ACCOUNT.name },
+    };
+  }
 
   const {
     data: { user },

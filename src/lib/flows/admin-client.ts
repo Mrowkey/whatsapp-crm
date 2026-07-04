@@ -1,4 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { AUTH_DISABLED } from '@/lib/auth/mode'
+import { createMockSupabaseClient } from '@/lib/supabase/mock'
 
 // Lazy, shared service-role client for the Flows engine.
 // Mirrors src/lib/automations/admin-client.ts — same shape so anyone
@@ -7,6 +9,11 @@ let _adminClient: SupabaseClient | null = null
 
 export function supabaseAdmin(): SupabaseClient {
   if (!_adminClient) {
+    if (AUTH_DISABLED) {
+      _adminClient = createMockSupabaseClient()
+      return _adminClient
+    }
+
     _adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,

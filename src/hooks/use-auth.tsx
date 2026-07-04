@@ -20,6 +20,8 @@ import {
   isAccountRole,
   type AccountRole,
 } from "@/lib/auth/roles";
+import { AUTH_DISABLED } from "@/lib/auth/mode";
+import { DEMO_ACCOUNT, DEMO_PROFILE, DEMO_USER } from "@/lib/supabase/mock";
 
 interface Profile {
   id: string;
@@ -106,6 +108,17 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const DEMO_PROFILE_VIEW: Profile = {
+  id: DEMO_PROFILE.id,
+  full_name: DEMO_PROFILE.full_name,
+  email: DEMO_PROFILE.email,
+  avatar_url: DEMO_PROFILE.avatar_url,
+  role: DEMO_PROFILE.role,
+  beta_features: DEMO_PROFILE.beta_features,
+  account_id: DEMO_PROFILE.account_id,
+  account_role: "owner",
+};
+
 /**
  * AuthProvider — wrap this around the dashboard layout.
  * Makes ONE getSession() call for the whole tree instead of one per
@@ -126,6 +139,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // a profile for. This prevents redundant re-fetches and toggling
   // profileLoading back to true on window focus events/token refresh.
   const lastFetchedUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!AUTH_DISABLED) return;
+
+    setUser(DEMO_USER);
+    setProfile(DEMO_PROFILE_VIEW);
+    setAccount({ id: DEMO_ACCOUNT.id, name: DEMO_ACCOUNT.name, default_currency: DEMO_ACCOUNT.default_currency });
+    setLoading(false);
+    setProfileLoading(false);
+  }, []);
 
   // Shared across init, auth-state-change listener, and the exposed
   // refreshProfile() callback. Reads the current session's user id and
@@ -226,6 +249,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (AUTH_DISABLED) return;
+
     const supabase = createClient();
     let mounted = true;
 
@@ -301,6 +326,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile]);
 
   const signOut = useCallback(async () => {
+    if (AUTH_DISABLED) {
+      window.location.href = "/dashboard";
+      return;
+    }
+
     const supabase = createClient();
     await supabase.auth.signOut();
     setUser(null);
@@ -364,15 +394,21 @@ export function useAuth(): AuthContextValue {
     // collapses to least-privileged null — every `canX` boolean is
     // false so UI gates fail closed.
     return {
-      user: null,
-      profile: null,
+      user: AUTH_DISABLED ? DEMO_USER : null,
+      profile: AUTH_DISABLED ? DEMO_PROFILE_VIEW : null,
       loading: false,
       profileLoading: false,
       signOut: async () => {
-        window.location.href = "/login";
+        window.location.href = AUTH_DISABLED ? "/dashboard" : "/login";
       },
       refreshProfile: async () => {},
-      account: null,
+      account: AUTH_DISABLED
+        ? {
+            id: DEMO_ACCOUNT.id,
+            name: DEMO_ACCOUNT.name,
+            default_currency: DEMO_ACCOUNT.default_currency,
+          }
+        : null,
       defaultCurrency: DEFAULT_CURRENCY,
       accountId: null,
       accountRole: null,

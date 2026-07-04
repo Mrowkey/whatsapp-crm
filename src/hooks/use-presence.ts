@@ -12,6 +12,16 @@ import {
   type StoredPresence,
 } from "@/lib/presence";
 
+function isTransientPresenceFetchError(message: string | null | undefined) {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("load failed")
+  );
+}
+
 // How often the viewer re-derives presence locally. The online→offline
 // transition fires NO database event (it's just the clock passing the
 // staleness threshold), so without this tick a member who closes their
@@ -120,6 +130,7 @@ export function usePresence(enabled = true): UsePresenceResult {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
+          if (isTransientPresenceFetchError(error.message)) return;
           console.error("[usePresence] initial fetch error:", error.message);
           return;
         }

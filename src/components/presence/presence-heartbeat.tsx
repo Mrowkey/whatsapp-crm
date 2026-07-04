@@ -6,6 +6,16 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { HEARTBEAT_MS, IDLE_AFTER_MS, type StoredPresence } from "@/lib/presence";
 
+function isTransientPresenceFetchError(message: string | null | undefined) {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("load failed")
+  );
+}
+
 /**
  * PresenceHeartbeat — headless. Mount ONCE per signed-in dashboard tab
  * (in the dashboard shell, below the auth gate). Reports this tab's
@@ -21,6 +31,7 @@ import { HEARTBEAT_MS, IDLE_AFTER_MS, type StoredPresence } from "@/lib/presence
  */
 export function PresenceHeartbeat() {
   const { accountId } = useAuth();
+  const lastLoggedErrorRef = useRef<string | null>(null);
 
   // 0 = "never recorded"; set on mount so we don't read the clock during
   // render (impure). Until the effect runs the tab counts as active.
@@ -50,19 +61,36 @@ export function PresenceHeartbeat() {
 
     const beat = async () => {
       if (cancelled) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
       // Coalesce bursts: a tab refocus fires visibilitychange AND focus
       // together, so skip a beat within 1s of the last to avoid two RPCs
       // in the same frame. The 30s interval is never affected.
       const t = Date.now();
       if (t - lastBeatAt < 1_000) return;
       lastBeatAt = t;
-      const { error } = await supabase.rpc("touch_presence", {
-        p_status: currentStatus(),
-      });
-      if (error && !cancelled) {
-        // Non-fatal: presence is best-effort. Log once per failure so a
-        // misconfigured RPC is visible without spamming.
-        console.error("[PresenceHeartbeat] touch_presence failed:", error.message);
+      try {
+        const { error } = await supabase.rpc("touch_presence", {
+          p_status: currentStatus(),
+        });
+        if (!error) {
+          lastLoggedErrorRef.current = null;
+          return;
+        }
+        if (cancelled || isTransientPresenceFetchError(error.message)) return;
+        // Non-fatal: presence is best-effort. Log only when the failure
+        // changes so persistent schema/RPC misconfigurations stay visible
+        // without flooding the console.
+        if (lastLoggedErrorRef.current !== error.message) {
+          lastLoggedErrorRef.current = error.message;
+          console.error("[PresenceHeartbeat] touch_presence failed:", error.message);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (cancelled || isTransientPresenceFetchError(message)) return;
+        if (lastLoggedErrorRef.current !== message) {
+          lastLoggedErrorRef.current = message;
+          console.error("[PresenceHeartbeat] touch_presence failed:", message);
+        }
       }
     };
 

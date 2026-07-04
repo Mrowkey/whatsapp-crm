@@ -1,7 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { AUTH_DISABLED } from '@/lib/auth/mode'
+import { createMockSupabaseClient } from '@/lib/supabase/mock'
 
 export async function createClient() {
+  if (AUTH_DISABLED) {
+    return createMockSupabaseClient()
+  }
+
   const cookieStore = await cookies()
 
   return createServerClient(
