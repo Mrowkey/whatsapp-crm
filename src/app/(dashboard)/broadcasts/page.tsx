@@ -234,8 +234,17 @@ export default function BroadcastsPage() {
                 return (
                   <TableRow
                     key={broadcast.id}
-                    className="cursor-pointer border-border hover:bg-muted/50"
+                    className="cursor-pointer border-border hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-inset"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open broadcast ${broadcast.name}`}
                     onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        router.push(`/broadcasts/${broadcast.id}`);
+                      }
+                    }}
                   >
                     <TableCell className="font-medium text-foreground">
                       {broadcast.name}
