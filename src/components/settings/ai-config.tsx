@@ -214,7 +214,7 @@ export function AiConfig() {
     <div>
       <SettingsPanelHead
         title="AI Assistant"
-        description="Bring your own OpenAI or Anthropic key. wacrm calls the provider directly with your key — no per-seat AI fees, and your data stays yours. Powers AI-drafted replies in the inbox and an optional auto-reply bot."
+        description="Bring your own OpenAI or Anthropic key. Relay calls the provider directly with your key — no per-seat AI fees, and your data stays yours. Powers AI-drafted replies in the inbox and an optional auto-reply bot."
       />
 
       {!canEdit && (
