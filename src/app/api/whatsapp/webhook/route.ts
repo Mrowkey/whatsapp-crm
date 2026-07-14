@@ -347,6 +347,12 @@ async function handleStatusUpdate(status: {
   status: string
   timestamp: string
   recipient_id: string
+  errors?: {
+    code?: number
+    title?: string
+    message?: string
+    error_data?: { details?: string }
+  }[]
 }) {
   // 1) Mirror onto messages (legacy behavior) — Meta's status values
   //    already match the CHECK constraint on messages.status. No
@@ -374,7 +380,7 @@ async function handleStatusUpdate(status: {
 
   const { data: recipient, error: recFetchErr } = await supabaseAdmin()
     .from('broadcast_recipients')
-    .select('id, status')
+    .select('id, broadcast_id, status')
     .eq('whatsapp_message_id', status.id)
     .maybeSingle()
 
@@ -390,6 +396,16 @@ async function handleStatusUpdate(status: {
     if (status.status === 'sent' && !('sent_at' in update)) update.sent_at = tsIso
     if (status.status === 'delivered') update.delivered_at = tsIso
     if (status.status === 'read') update.read_at = tsIso
+    if (status.status === 'failed') {
+      // Meta's failure detail lives in `errors[0]` — without this the
+      // recipient just says "failed" with no way to diagnose why
+      // (media fetch failure, template quality block, recipient opt-out,
+      // etc). Take the most specific field available.
+      const err = status.errors?.[0]
+      update.error_message = err
+        ? (err.error_data?.details ?? err.message ?? err.title ?? 'Unknown error')
+        : 'Unknown error'
+    }
 
     const { error: recUpdateErr } = await supabaseAdmin()
       .from('broadcast_recipients')
@@ -398,6 +414,33 @@ async function handleStatusUpdate(status: {
 
     if (recUpdateErr) {
       console.error('Error updating broadcast recipient status:', recUpdateErr)
+    } else if (status.status === 'failed') {
+      // The aggregate trigger (migration 005) keeps sent/failed *counts*
+      // in sync, but never touches the parent `broadcasts.status` text
+      // column — that's written once by the client at the end of the
+      // initial send loop and never revisited. A message that Meta
+      // initially accepted (so the client wrote status='sent') can still
+      // fail asynchronously via this webhook, leaving the broadcast
+      // permanently mislabeled "Sent" even when every recipient failed.
+      // Recheck here and flip it to 'failed' once every recipient has
+      // resolved to that terminal state.
+      const { data: bcast } = await supabaseAdmin()
+        .from('broadcasts')
+        .select('status, total_recipients, failed_count')
+        .eq('id', recipient.broadcast_id)
+        .maybeSingle()
+
+      if (
+        bcast &&
+        bcast.status !== 'failed' &&
+        bcast.total_recipients > 0 &&
+        bcast.failed_count >= bcast.total_recipients
+      ) {
+        await supabaseAdmin()
+          .from('broadcasts')
+          .update({ status: 'failed' })
+          .eq('id', recipient.broadcast_id)
+      }
     }
   }
 
@@ -982,8 +1025,15 @@ async function findOrCreateContact(
   )
 
   if (existingContact) {
-    // Update name if it changed
-    if (name && name !== existingContact.name) {
+    // Only backfill the name while it's still the auto-generated
+    // fallback (phone number as name, set below when no WhatsApp
+    // profile name was available yet). Once a contact has a real name
+    // — whether synced from a later WhatsApp profile name or typed in
+    // manually by a teammate — every future inbound message must NOT
+    // clobber it. Previously this ran unconditionally on every
+    // message, silently reverting any manual rename in the CRM back
+    // to the sender's current WhatsApp display name.
+    if (name && name !== existingContact.name && existingContact.name === existingContact.phone) {
       await supabaseAdmin()
         .from('contacts')
         .update({ name, updated_at: new Date().toISOString() })

@@ -18,6 +18,7 @@ import {
   type ContactTagAssignment,
 } from '@/lib/contacts/resolve-import-tags';
 import { cn } from '@/lib/utils';
+import { isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -139,6 +140,7 @@ export function ImportModal({
     imported: number;
     skipped: number;
     failed: number;
+    invalidPhone: number;
     tagsAssigned: number;
   } | null>(null);
 
@@ -220,8 +222,20 @@ export function ImportModal({
       let skipped = 0;
       let failed = 0;
 
+      // 0) Reject rows whose phone doesn't even look like a phone number
+      //    before they reach de-dupe/insert. Previously any non-empty
+      //    string ("N/A", a stray note, a mistyped cell) was inserted
+      //    as-is — the contact would then silently fail every future
+      //    WhatsApp send with no indication the number was ever bad.
+      const invalidPhone = parsedRows.filter(
+        (row) => !isValidE164(sanitizePhoneForMeta(row.phone))
+      ).length;
+      const validRows = parsedRows.filter((row) =>
+        isValidE164(sanitizePhoneForMeta(row.phone))
+      );
+
       // 1) De-dupe within the file by normalized phone (keep first).
-      const { unique, duplicates: inFileDupes } = dedupeByPhone(parsedRows);
+      const { unique, duplicates: inFileDupes } = dedupeByPhone(validRows);
       skipped += inFileDupes;
 
       // 2) Skip numbers already in this account. One read of the
@@ -339,7 +353,7 @@ export function ImportModal({
         toast.warning('Contacts imported, but some tag assignments failed.');
       }
 
-      setResult({ imported, skipped, failed, tagsAssigned });
+      setResult({ imported, skipped, failed, invalidPhone, tagsAssigned });
       if (imported > 0) {
         toast.success(
           `${imported} contact${imported !== 1 ? 's' : ''} imported`
@@ -361,6 +375,11 @@ export function ImportModal({
       }
       if (skipped > 0) {
         toast.info(`${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped`);
+      }
+      if (invalidPhone > 0) {
+        toast.warning(
+          `${invalidPhone} row${invalidPhone !== 1 ? 's' : ''} skipped — phone number wasn't valid`
+        );
       }
       if (failed > 0) {
         toast.error(
@@ -607,6 +626,13 @@ export function ImportModal({
                   <div className="flex items-center gap-1.5 text-sm text-amber-400">
                     <AlertTriangle className="size-4 shrink-0" />
                     {result.skipped} skipped
+                  </div>
+                )}
+                {result.invalidPhone > 0 && (
+                  <div className="flex items-center gap-1.5 text-sm text-amber-400">
+                    <AlertTriangle className="size-4 shrink-0" />
+                    {result.invalidPhone} invalid phone
+                    {result.invalidPhone !== 1 ? 's' : ''}
                   </div>
                 )}
                 {result.failed > 0 && (

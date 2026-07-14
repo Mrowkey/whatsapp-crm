@@ -11,6 +11,7 @@ import {
   isUniqueViolation,
   type ExistingContact,
 } from '@/lib/contacts/dedupe';
+import { isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils';
 import {
   Dialog,
   DialogContent,
@@ -124,6 +125,15 @@ export function ContactForm({
 
     if (!phone.trim()) {
       toast.error('Phone number is required');
+      return;
+    }
+
+    // Catches garbage input ("not-a-phone-number", stray text, etc.)
+    // before it ever reaches the DB — previously any non-empty string
+    // was accepted, and a malformed number would just silently fail
+    // every future send to that contact with no warning at add time.
+    if (!isValidE164(sanitizePhoneForMeta(phone.trim()))) {
+      toast.error('Enter a valid phone number, e.g. +91 98765 43210');
       return;
     }
 
