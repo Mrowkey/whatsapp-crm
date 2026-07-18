@@ -10,6 +10,7 @@ import {
 import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults'
 import { generateOpenAi, generateOpenAiWithTools } from './providers/openai'
 import { generateAnthropic, generateAnthropicWithTools } from './providers/anthropic'
+import { generateGroq, generateGroqWithTools } from './providers/groq'
 
 export interface GenerateArgs {
   config: AiConfig
@@ -42,6 +43,9 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
       break
     case 'anthropic':
       raw = await generateAnthropic(providerArgs)
+      break
+    case 'groq':
+      raw = await generateGroq(providerArgs)
       break
     default:
       throw new AiError(`Unsupported AI provider: ${config.provider}`, {
@@ -99,6 +103,9 @@ export async function generateAgentReply(args: GenerateAgentArgs): Promise<Agent
       break
     case 'anthropic':
       raw = await generateAnthropicWithTools(providerArgs)
+      break
+    case 'groq':
+      raw = await generateGroqWithTools(providerArgs)
       break
     default:
       throw new AiError(`Unsupported AI provider: ${config.provider}`, {
