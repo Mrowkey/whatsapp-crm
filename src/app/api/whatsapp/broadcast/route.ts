@@ -56,6 +56,48 @@ interface NewRecipient {
    * sendTemplateMessage for the merge rules.
    */
   messageParams?: SendTimeParams
+  /**
+   * The contact this recipient resolves to, when the caller already
+   * knows it (the dashboard wizard always does). Used to record the
+   * sent message onto that contact's conversation — without it, a
+   * successfully delivered broadcast is invisible in the Inbox even
+   * though Meta actually sent it, which is exactly what happened
+   * before this field existed (issue: broadcasts left the whole
+   * conversation thread looking untouched).
+   */
+  contactId?: string
+}
+
+/**
+ * Mirrors the same-name helper in /api/whatsapp/send — find the
+ * contact's conversation in this account, creating one if it doesn't
+ * exist yet (a contact who's never been messaged before still needs a
+ * thread for the broadcast to land in).
+ */
+async function findOrCreateConversationForContact(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  accountId: string,
+  userId: string,
+  contactId: string,
+): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('account_id', accountId)
+    .eq('contact_id', contactId)
+    .maybeSingle()
+  if (existing) return existing.id
+
+  const { data: created, error } = await supabase
+    .from('conversations')
+    .insert({ account_id: accountId, user_id: userId, contact_id: contactId })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('[broadcast] failed to create conversation for contact:', contactId, error.message)
+    return null
+  }
+  return created.id
 }
 
 export async function POST(request: Request) {
@@ -232,6 +274,41 @@ export async function POST(request: Request) {
           whatsapp_message_id: sentMessageId,
         })
         sentCount++
+
+        // Record the send onto the contact's conversation so it shows up
+        // in the Inbox — previously a broadcast could be fully Delivered
+        // and Read on WhatsApp while the thread in Relay looked
+        // completely untouched, with no trace of what was sent.
+        if (recipient.contactId) {
+          const conversationId = await findOrCreateConversationForContact(
+            supabase,
+            accountId,
+            user.id,
+            recipient.contactId,
+          )
+          if (conversationId) {
+            const { error: msgErr } = await supabase.from('messages').insert({
+              conversation_id: conversationId,
+              sender_type: 'bot',
+              content_type: 'template',
+              template_name,
+              message_id: sentMessageId,
+              status: 'sent',
+            })
+            if (msgErr) {
+              console.error('[broadcast] failed to record sent message:', msgErr.message)
+            } else {
+              await supabase
+                .from('conversations')
+                .update({
+                  last_message_text: `[template:${template_name}]`,
+                  last_message_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', conversationId)
+            }
+          }
+        }
       } else {
         console.error(
           `Failed to send broadcast to ${recipient.phone}:`,

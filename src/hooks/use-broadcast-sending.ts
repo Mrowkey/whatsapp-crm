@@ -461,6 +461,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           .filter((r) => r.contact?.phone)
           .map((r) => ({
             phone: r.contact!.phone as string,
+            // Lets the route record the sent message onto this contact's
+            // conversation so it actually shows up in the Inbox — without
+            // this, a successfully delivered broadcast left no trace at
+            // all in the thread.
+            contactId: r.contact!.id,
             params: r.contact
               ? resolveVariables(
                   payload.variables,
