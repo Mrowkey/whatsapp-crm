@@ -1,7 +1,7 @@
 import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
-import { buildConversationContext } from './context'
-import { generateReply } from './generate'
+import { buildConversationContext, buildCrmContext } from './context'
+import { runAgenticReply } from './agent'
 import { buildSystemPrompt } from './defaults'
 import { engineSendText } from '@/lib/flows/meta-send'
 
@@ -77,15 +77,28 @@ export async function dispatchInboundToAiReply(
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return
 
+    // Best-effort — a failed CRM lookup shouldn't block replying from
+    // chat history alone.
+    const crmContext = await buildCrmContext(db, { accountId, contactId }).catch((err) => {
+      console.error('[ai auto-reply] buildCrmContext failed:', err)
+      return undefined
+    })
+
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
+      crmContext,
     })
 
-    const { text, handoff } = await generateReply({
+    const { text, handoff } = await runAgenticReply({
+      db,
       config,
       systemPrompt,
-      messages,
+      history: messages,
+      accountId,
+      conversationId,
+      contactId,
+      userId: configOwnerUserId,
     })
 
     if (handoff || !text) {

@@ -73,6 +73,15 @@ export type AgentGenerateResult =
   | { kind: 'text'; text: string; handoff: boolean }
   | { kind: 'tool_calls'; calls: { id: string; name: string; arguments: Record<string, unknown> }[] }
 
+/** CRM facts about a contact, built by `buildCrmContext` (context.ts)
+ *  and rendered into the agent's system prompt for personalization. */
+export interface CrmContext {
+  contactName: string | null
+  tags: string[]
+  customFields: Record<string, string>
+  activeDeal: { pipelineName: string; stageName: string; title: string; value: number } | null
+}
+
 /**
  * Typed error for every AI failure mode. `status` maps cleanly to an
  * HTTP response in the draft route; `code` lets the UI/tests branch

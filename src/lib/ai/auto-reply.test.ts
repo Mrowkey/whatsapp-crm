@@ -5,7 +5,8 @@ import type { AiConfig } from './types'
 const h = vi.hoisted(() => ({
   loadAiConfig: vi.fn(),
   buildConversationContext: vi.fn(),
-  generateReply: vi.fn(),
+  buildCrmContext: vi.fn(),
+  runAgenticReply: vi.fn(),
   engineSendText: vi.fn(),
   state: {
     conv: null as Record<string, unknown> | null,
@@ -17,8 +18,11 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('./config', () => ({ loadAiConfig: h.loadAiConfig }))
-vi.mock('./context', () => ({ buildConversationContext: h.buildConversationContext }))
-vi.mock('./generate', () => ({ generateReply: h.generateReply }))
+vi.mock('./context', () => ({
+  buildConversationContext: h.buildConversationContext,
+  buildCrmContext: h.buildCrmContext,
+}))
+vi.mock('./agent', () => ({ runAgenticReply: h.runAgenticReply }))
 vi.mock('@/lib/flows/meta-send', () => ({ engineSendText: h.engineSendText }))
 vi.mock('./admin-client', () => ({
   supabaseAdmin: () => ({
@@ -89,7 +93,13 @@ beforeEach(() => {
   h.state.rpcCalls = []
   h.loadAiConfig.mockResolvedValue(aiConfig())
   h.buildConversationContext.mockResolvedValue([{ role: 'user', content: 'hi' }])
-  h.generateReply.mockResolvedValue({ text: 'Hello!', handoff: false })
+  h.buildCrmContext.mockResolvedValue({
+    contactName: null,
+    tags: [],
+    customFields: {},
+    activeDeal: null,
+  })
+  h.runAgenticReply.mockResolvedValue({ text: 'Hello!', handoff: false })
   h.engineSendText.mockResolvedValue({ whatsapp_message_id: 'm1' })
 })
 
@@ -110,7 +120,7 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
   it('stands down when an active message-level automation exists', async () => {
     h.state.autoResponders = [{ id: 'auto-1' }]
     await dispatchInboundToAiReply(ARGS)
-    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.runAgenticReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()
   })
 
@@ -125,7 +135,7 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
   it('skips when AI is off / not configured', async () => {
     h.loadAiConfig.mockResolvedValue(null)
     await dispatchInboundToAiReply(ARGS)
-    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.runAgenticReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()
   })
 
@@ -168,14 +178,14 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
   it('skips when there is nothing to reply to', async () => {
     h.buildConversationContext.mockResolvedValue([])
     await dispatchInboundToAiReply(ARGS)
-    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.runAgenticReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()
   })
 })
 
 describe('dispatchInboundToAiReply — handoff', () => {
   it('disables auto-reply and does not send on handoff', async () => {
-    h.generateReply.mockResolvedValue({ text: '', handoff: true })
+    h.runAgenticReply.mockResolvedValue({ text: '', handoff: true })
     await dispatchInboundToAiReply(ARGS)
     expect(h.engineSendText).not.toHaveBeenCalled()
     expect(h.state.updatePayload).toEqual({ ai_autoreply_disabled: true })

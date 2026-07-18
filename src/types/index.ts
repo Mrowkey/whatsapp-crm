@@ -159,13 +159,18 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   contact?: Contact;
+  /** True once the AI auto-reply agent has stopped replying on this
+   *  thread (handoff, sticky until a teammate takes over or re-enables). */
+  ai_autoreply_disabled?: boolean;
+  /** Set by the escalate_to_human tool — why the AI handed off. */
+  ai_handoff_reason?: string | null;
 }
 
 // ============================================================
 // Notifications (migration 027)
 // ============================================================
 
-export type NotificationType = 'conversation_assigned';
+export type NotificationType = 'conversation_assigned' | 'ai_escalation';
 
 export interface Notification {
   id: string;
