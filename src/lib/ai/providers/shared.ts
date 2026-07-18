@@ -1,4 +1,4 @@
-import { AiError, type ChatMessage } from '../types'
+import { AiError, type AgentMessage, type ChatMessage, type ToolDefinition } from '../types'
 
 // ============================================================
 // Bits shared by the OpenAI + Anthropic adapters.
@@ -11,6 +11,25 @@ export interface ProviderArgs {
   messages: ChatMessage[]
   timeoutMs: number
 }
+
+/** Sibling of `ProviderArgs` for the tool-calling agent path. */
+export interface AgentProviderArgs {
+  apiKey: string
+  model: string
+  systemPrompt: string
+  messages: AgentMessage[]
+  tools: ToolDefinition[]
+  timeoutMs: number
+}
+
+/**
+ * Raw provider output before handoff-sentinel parsing (that step happens
+ * once, centrally, in `generate.ts` — same split as the plain
+ * `generateOpenAi`/`generateAnthropic` returning raw text today).
+ */
+export type RawAgentResult =
+  | { kind: 'text'; text: string }
+  | { kind: 'tool_calls'; calls: { id: string; name: string; arguments: Record<string, unknown> }[] }
 
 /** Map a fetch rejection (timeout / DNS / offline) to a typed AiError. */
 export function toNetworkError(err: unknown): AiError {
@@ -79,6 +98,34 @@ export function mergeConsecutive(messages: ChatMessage[]): ChatMessage[] {
       last.content = `${last.content}\n\n${m.content}`
     } else {
       out.push({ role: m.role, content: m.content })
+    }
+  }
+  return out
+}
+
+/** True for the plain user/assistant text variant of `AgentMessage` —
+ *  distinguishes it from the tool-call and tool-result variants, which
+ *  must never be silently merged into a preceding text turn (that would
+ *  corrupt the tool-call/tool-result pairing both providers require). */
+function isAgentText(
+  m: AgentMessage,
+): m is { role: 'user' | 'assistant'; content: string } {
+  return (m.role === 'user' || m.role === 'assistant') && 'content' in m
+}
+
+/**
+ * Tool-call-aware sibling of `mergeConsecutive`. Only collapses adjacent
+ * plain-text turns of the same role; a `tool_calls` or `tool_result`
+ * turn is always left standing on its own.
+ */
+export function mergeConsecutiveAgent(messages: AgentMessage[]): AgentMessage[] {
+  const out: AgentMessage[] = []
+  for (const m of messages) {
+    const last = out[out.length - 1]
+    if (last && isAgentText(last) && isAgentText(m) && last.role === m.role) {
+      last.content = `${last.content}\n\n${m.content}`
+    } else {
+      out.push(m)
     }
   }
   return out

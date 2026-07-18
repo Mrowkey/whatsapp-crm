@@ -26,9 +26,11 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Bot,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -990,6 +992,33 @@ export function MessageThread({
           </DropdownMenu>
         </div>
       </div>
+
+      {/* AI escalation banner — the AI agent handed this thread off to a
+          human (see src/lib/ai/tools.ts::escalate_to_human) and disabled
+          its own auto-reply on it. Clears once someone takes ownership;
+          "Take over" reuses the same assignment path as the manual Assign
+          dropdown above, which is what actually stops the AI (assigning
+          an agent is one of dispatchInboundToAiReply's eligibility gates). */}
+      {conversation.ai_handoff_reason && !assignedAgentId && (
+        <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <Bot className="h-4 w-4 flex-shrink-0 text-amber-500" />
+            <p className="truncate text-xs text-amber-600 dark:text-amber-400">
+              <span className="font-medium">AI escalated:</span>{" "}
+              {conversation.ai_handoff_reason}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 flex-shrink-0 border-amber-500/40 text-xs text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+            onClick={() => handleAssignChange(user?.id ?? null)}
+            disabled={!user?.id}
+          >
+            Take over
+          </Button>
+        </div>
+      )}
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">

@@ -162,3 +162,45 @@ describe('generateReply — Anthropic', () => {
     expect(body.messages).toHaveLength(1)
   })
 })
+
+describe('generateReply — Groq', () => {
+  it('calls the OpenAI-compatible endpoint and returns the reply', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        okResponse({ choices: [{ message: { content: 'Sure — happy to help!' } }] }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await generateReply({
+      config: config({ provider: 'groq', apiKey: 'gsk-test' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res).toEqual({ text: 'Sure — happy to help!', handoff: false })
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('api.groq.com')
+    expect(opts.headers.Authorization).toBe('Bearer gsk-test')
+    const body = JSON.parse(opts.body)
+    expect(body.max_tokens).toBeTruthy()
+    expect(body.max_completion_tokens).toBeUndefined()
+  })
+
+  it('maps a 401 to an invalid_key AiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        errResponse(401, { error: { message: 'Invalid API Key' } }),
+      ),
+    )
+
+    await expect(
+      generateReply({
+        config: config({ provider: 'groq' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_key', status: 401 })
+  })
+})

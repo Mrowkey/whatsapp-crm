@@ -1,5 +1,4 @@
 import { AiError, type AgentMessage, type ToolDefinition } from '../types'
-import { MAX_OUTPUT_TOKENS } from '../defaults'
 import {
   mergeConsecutive,
   mergeConsecutiveAgent,
@@ -10,9 +9,16 @@ import {
   type RawAgentResult,
 } from './shared'
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
-interface OpenAiResponse {
+// Groq's Chat Completions endpoint is OpenAI-compatible, so the request/
+// response shapes below mirror providers/openai.ts almost exactly — the
+// one real difference is the token-limit field name (`max_tokens`, not
+// OpenAI's newer `max_completion_tokens`, which Groq's compat layer
+// doesn't recognize on most models).
+const GROQ_MAX_OUTPUT_TOKENS = 1024
+
+interface GroqResponse {
   choices?: {
     message?: {
       content?: string
@@ -21,17 +27,12 @@ interface OpenAiResponse {
   }[]
 }
 
-/**
- * Call OpenAI's Chat Completions endpoint with the caller's own key.
- * Returns the raw assistant text (handoff parsing happens in
- * `generateReply`).
- */
-export async function generateOpenAi(args: ProviderArgs): Promise<string> {
+export async function generateGroq(args: ProviderArgs): Promise<string> {
   const { apiKey, model, systemPrompt, messages, timeoutMs } = args
 
   let res: Response
   try {
-    res = await fetch(OPENAI_URL, {
+    res = await fetch(GROQ_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -43,7 +44,7 @@ export async function generateOpenAi(args: ProviderArgs): Promise<string> {
           { role: 'system', content: systemPrompt },
           ...mergeConsecutive(messages),
         ],
-        max_completion_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: GROQ_MAX_OUTPUT_TOKENS,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
@@ -52,13 +53,13 @@ export async function generateOpenAi(args: ProviderArgs): Promise<string> {
   }
 
   if (!res.ok) {
-    throw await providerHttpError('OpenAI', res)
+    throw await providerHttpError('Groq', res)
   }
 
-  const data = (await res.json().catch(() => null)) as OpenAiResponse | null
+  const data = (await res.json().catch(() => null)) as GroqResponse | null
   const text = data?.choices?.[0]?.message?.content
   if (!text || typeof text !== 'string' || !text.trim()) {
-    throw new AiError('OpenAI returned an empty response.', {
+    throw new AiError('Groq returned an empty response.', {
       code: 'empty_response',
     })
   }
@@ -67,19 +68,18 @@ export async function generateOpenAi(args: ProviderArgs): Promise<string> {
 
 // ------------------------------------------------------------
 // Tool-calling variant, used only by the auto-reply agent loop
-// (src/lib/ai/agent.ts). Independent of `generateOpenAi` above so the
-// manual "Draft with AI" path is never affected by this.
+// (src/lib/ai/agent.ts).
 // ------------------------------------------------------------
 
-interface OpenAiChatMessage {
+interface GroqChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content?: string | null
   tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[]
   tool_call_id?: string
 }
 
-function toOpenAiMessages(systemPrompt: string, messages: AgentMessage[]): OpenAiChatMessage[] {
-  const out: OpenAiChatMessage[] = [{ role: 'system', content: systemPrompt }]
+function toGroqMessages(systemPrompt: string, messages: AgentMessage[]): GroqChatMessage[] {
+  const out: GroqChatMessage[] = [{ role: 'system', content: systemPrompt }]
   for (const m of mergeConsecutiveAgent(messages)) {
     if (m.role === 'tool_result') {
       out.push({ role: 'tool', tool_call_id: m.toolCallId, content: m.content })
@@ -100,7 +100,7 @@ function toOpenAiMessages(systemPrompt: string, messages: AgentMessage[]): OpenA
   return out
 }
 
-function toOpenAiTools(tools: ToolDefinition[]) {
+function toGroqTools(tools: ToolDefinition[]) {
   return tools.map((t) => ({
     type: 'function' as const,
     function: { name: t.name, description: t.description, parameters: t.parameters },
@@ -116,12 +116,12 @@ function safeJsonParse(raw: string): Record<string, unknown> {
   }
 }
 
-export async function generateOpenAiWithTools(args: AgentProviderArgs): Promise<RawAgentResult> {
+export async function generateGroqWithTools(args: AgentProviderArgs): Promise<RawAgentResult> {
   const { apiKey, model, systemPrompt, messages, tools, timeoutMs } = args
 
   let res: Response
   try {
-    res = await fetch(OPENAI_URL, {
+    res = await fetch(GROQ_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -129,9 +129,9 @@ export async function generateOpenAiWithTools(args: AgentProviderArgs): Promise<
       },
       body: JSON.stringify({
         model,
-        messages: toOpenAiMessages(systemPrompt, messages),
-        ...(tools.length ? { tools: toOpenAiTools(tools) } : {}),
-        max_completion_tokens: MAX_OUTPUT_TOKENS,
+        messages: toGroqMessages(systemPrompt, messages),
+        ...(tools.length ? { tools: toGroqTools(tools) } : {}),
+        max_tokens: GROQ_MAX_OUTPUT_TOKENS,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
@@ -140,10 +140,10 @@ export async function generateOpenAiWithTools(args: AgentProviderArgs): Promise<
   }
 
   if (!res.ok) {
-    throw await providerHttpError('OpenAI', res)
+    throw await providerHttpError('Groq', res)
   }
 
-  const data = (await res.json().catch(() => null)) as OpenAiResponse | null
+  const data = (await res.json().catch(() => null)) as GroqResponse | null
   const message = data?.choices?.[0]?.message
 
   if (message?.tool_calls?.length) {
@@ -159,7 +159,7 @@ export async function generateOpenAiWithTools(args: AgentProviderArgs): Promise<
 
   const text = message?.content
   if (!text || typeof text !== 'string' || !text.trim()) {
-    throw new AiError('OpenAI returned an empty response.', {
+    throw new AiError('Groq returned an empty response.', {
       code: 'empty_response',
     })
   }

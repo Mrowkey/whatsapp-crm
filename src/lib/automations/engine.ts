@@ -16,6 +16,7 @@ import type {
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
+import { applyTag, updateContactField, createDeal } from '@/lib/crm-actions'
 
 // ------------------------------------------------------------
 // Public API
@@ -395,15 +396,11 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     case 'add_tag': {
       // contact_tags has no account_id column; cross-tenant protection for
       // the attacker-supplied contactId comes from the ownership guard in
-      // runAutomationsForTrigger.
+      // runAutomationsForTrigger. Actual write lives in crm-actions.ts,
+      // shared with the AI agent's tool-calling layer.
       const cfg = step.step_config as TagStepConfig
       if (!args.contactId || !cfg.tag_id) throw new Error('add_tag needs contact + tag_id')
-      await db
-        .from('contact_tags')
-        .upsert(
-          { contact_id: args.contactId, tag_id: cfg.tag_id },
-          { onConflict: 'contact_id,tag_id', ignoreDuplicates: true },
-        )
+      await applyTag(db, { contactId: args.contactId, tagId: cfg.tag_id, mode: 'add' })
       return `tag ${cfg.tag_id} added`
     }
 
@@ -412,11 +409,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       // ownership guard, since contact_tags carries no account_id.
       const cfg = step.step_config as TagStepConfig
       if (!args.contactId || !cfg.tag_id) throw new Error('remove_tag needs contact + tag_id')
-      await db
-        .from('contact_tags')
-        .delete()
-        .eq('contact_id', args.contactId)
-        .eq('tag_id', cfg.tag_id)
+      await applyTag(db, { contactId: args.contactId, tagId: cfg.tag_id, mode: 'remove' })
       return `tag ${cfg.tag_id} removed`
     }
 
@@ -450,76 +443,31 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       // Resolve workflow variables ({{ vars.* }}, {{ message.text }}) so custom
       // values can be populated dynamically from the triggering context.
       const value = interpolate(cfg.value, args)
-
-      // Custom fields are encoded as `custom:<custom_field_id>`; anything else
-      // is a built-in contact column.
-      if (cfg.field.startsWith('custom:')) {
-        const customFieldId = cfg.field.slice('custom:'.length)
-        if (!customFieldId) {
-          return `field ${cfg.field} not writable from automations`
-        }
-        // Defense in depth: the service-role client bypasses RLS, so confirm
-        // the field definition belongs to this account before writing.
-        const { data: field } = await db
-          .from('custom_fields')
-          .select('id')
-          .eq('id', customFieldId)
-          .eq('account_id', args.automation.account_id)
-          .maybeSingle()
-        if (!field) {
-          return `field ${cfg.field} not writable from automations`
-        }
-        // Upsert on the table's UNIQUE(contact_id, custom_field_id) so repeated
-        // runs overwrite rather than duplicate. Tenancy is enforced above and,
-        // for the contact side, by the entry-point ownership guard.
-        await db
-          .from('contact_custom_values')
-          .upsert(
-            { contact_id: args.contactId, custom_field_id: customFieldId, value },
-            { onConflict: 'contact_id,custom_field_id' },
-          )
-        return `custom field updated`
-      }
-
-      const allowed = new Set(['name', 'email', 'company'])
-      if (!allowed.has(cfg.field)) {
-        return `field ${cfg.field} not writable from automations`
-      }
-      // Defense in depth: scope the service-role write to the account so
-      // a future caller that skips the entry-point ownership guard still
-      // cannot write across tenants.
-      await db
-        .from('contacts')
-        .update({ [cfg.field]: value, updated_at: new Date().toISOString() })
-        .eq('id', args.contactId)
-        .eq('account_id', args.automation.account_id)
-      return `${cfg.field} updated`
+      // Actual write + tenancy guards live in crm-actions.ts, shared with
+      // the AI agent's tool-calling layer.
+      const result = await updateContactField(db, {
+        accountId: args.automation.account_id,
+        contactId: args.contactId,
+        field: cfg.field,
+        value,
+      })
+      if (!result.ok) return `${result.reason} from automations`
+      return cfg.field.startsWith('custom:') ? 'custom field updated' : `${cfg.field} updated`
     }
 
     case 'create_deal': {
       const cfg = step.step_config as CreateDealStepConfig
       if (!cfg.pipeline_id || !cfg.stage_id) throw new Error('create_deal needs pipeline + stage')
-      // Match the account's configured default currency rather than
-      // the static `deals.currency` DB default — keeps automation-
-      // created deals consistent with the one-currency-per-account
-      // rule (issue #218). Fall back to USD if the row is somehow
-      // missing the value (pre-021 forks).
-      const { data: acct } = await db
-        .from('accounts')
-        .select('default_currency')
-        .eq('id', args.automation.account_id)
-        .maybeSingle()
-      await db.from('deals').insert({
-        // Tenancy + audit, same split as automation_logs above.
-        account_id: args.automation.account_id,
-        user_id: args.automation.user_id,
-        pipeline_id: cfg.pipeline_id,
-        stage_id: cfg.stage_id,
-        contact_id: args.contactId,
+      // Actual insert + currency resolution live in crm-actions.ts,
+      // shared with the AI agent's tool-calling layer.
+      await createDeal(db, {
+        accountId: args.automation.account_id,
+        userId: args.automation.user_id,
+        pipelineId: cfg.pipeline_id,
+        stageId: cfg.stage_id,
+        contactId: args.contactId,
         title: interpolate(cfg.title, args),
-        value: cfg.value ?? 0,
-        currency: acct?.default_currency ?? 'USD',
-        status: 'open',
+        value: cfg.value,
       })
       return 'deal created'
     }
