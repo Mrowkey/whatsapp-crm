@@ -57,6 +57,14 @@ interface WhatsAppMessage {
     button_reply?: { id: string; title: string }
     list_reply?: { id: string; title: string; description?: string }
   }
+  /**
+   * Set when the customer taps a Quick Reply button on an approved
+   * message TEMPLATE (distinct from `interactive`, which is only for
+   * buttons/lists on messages we sent via the Interactive Messages API).
+   * Meta's webhook uses `type: "button"` for this case, with `text`
+   * carrying the button's display label.
+   */
+  button?: { payload?: string; text: string }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
 }
@@ -987,6 +995,18 @@ async function parseMessageContent(
       }
       return { ...empty, contentText: '[Interactive reply]' }
     }
+
+    case 'button':
+      // Tap on a template's Quick Reply button — a completely different
+      // webhook shape from `interactive` (which only covers buttons/lists
+      // on messages sent via the Interactive Messages API). Previously
+      // unhandled, so every template quick-reply tap landed as the
+      // generic "[Unsupported message type: button]" placeholder,
+      // silently discarding which button the customer actually chose.
+      return {
+        ...empty,
+        contentText: message.button?.text || message.button?.payload || '[Button reply]',
+      }
 
     default:
       return {

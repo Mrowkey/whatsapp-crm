@@ -197,10 +197,20 @@ function MessageContent({ message }: { message: Message }) {
             <LayoutTemplate className="h-3 w-3" />
             Template
           </span>
-          {message.content_text && (
+          {message.content_text ? (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
               {message.content_text}
             </p>
+          ) : (
+            // Broadcast/automation sends don't render the full templated
+            // body into content_text — without this fallback the bubble
+            // showed just the bare "Template" chip with no indication of
+            // which template was actually sent.
+            message.template_name && (
+              <p className="mt-1 text-sm text-muted-foreground italic">
+                {message.template_name}
+              </p>
+            )
           )}
         </div>
       );
