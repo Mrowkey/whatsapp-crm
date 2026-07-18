@@ -26,7 +26,24 @@ import { extractVariableIndices } from "@/lib/whatsapp/template-validators";
 export interface TemplateSendValues {
   body: string[];
   headerText?: string;
+  headerMediaUrl?: string;
   buttonParams?: Record<number, string>;
+}
+
+const MEDIA_HEADER_TYPES = ['image', 'video', 'document'] as const;
+type MediaHeaderType = (typeof MEDIA_HEADER_TYPES)[number];
+
+function isMediaHeaderType(value: unknown): value is MediaHeaderType {
+  return MEDIA_HEADER_TYPES.includes(value as MediaHeaderType);
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 interface TemplatePickerProps {
@@ -83,6 +100,7 @@ export function TemplatePicker({
   const [selected, setSelected] = useState<MessageTemplate | null>(null);
   const [params, setParams] = useState<string[]>([]);
   const [headerText, setHeaderText] = useState<string>("");
+  const [headerMediaUrl, setHeaderMediaUrl] = useState<string>("");
   const [buttonParams, setButtonParams] = useState<Record<number, string>>({});
 
   useEffect(() => {
@@ -133,6 +151,7 @@ export function TemplatePicker({
     setSelected(null);
     setParams([]);
     setHeaderText("");
+    setHeaderMediaUrl("");
     setButtonParams({});
   }
 
@@ -143,10 +162,20 @@ export function TemplatePicker({
 
   function pickTemplate(template: MessageTemplate) {
     const slots = collectVariableSlots(template);
+    const mediaHeaderType = isMediaHeaderType(template.header_type)
+      ? template.header_type
+      : null;
+    // Media-header templates (image/video/document) need a link on every
+    // send — Meta rejects the send without one. Previously this picker
+    // only checked body/header-text/button variables, so a media-header
+    // template with no other variables (like a marketing image blast)
+    // skipped straight to send with no media URL at all, guaranteeing
+    // "image header requires a media link or id at send time" every time.
     const noInputsNeeded =
       slots.bodyVars.length === 0 &&
       slots.headerVarCount === 0 &&
-      slots.urlButtonSlots.length === 0;
+      slots.urlButtonSlots.length === 0 &&
+      !mediaHeaderType;
     if (noInputsNeeded) {
       onSelect(template, { body: [] });
       handleOpenChange(false);
@@ -155,6 +184,9 @@ export function TemplatePicker({
     setSelected(template);
     setParams(new Array(slots.bodyVars.length).fill(""));
     setHeaderText("");
+    // Seed from the template's stored sample URL when it has one, so the
+    // common case (reuse the approved media) needs no typing.
+    setHeaderMediaUrl(template.header_media_url ?? "");
     setButtonParams({});
   }
 
@@ -162,6 +194,7 @@ export function TemplatePicker({
     if (!selected) return;
     const values: TemplateSendValues = { body: params };
     if (headerText.trim()) values.headerText = headerText.trim();
+    if (headerMediaUrl.trim()) values.headerMediaUrl = headerMediaUrl.trim();
     if (Object.keys(buttonParams).length > 0) {
       values.buttonParams = Object.fromEntries(
         Object.entries(buttonParams).map(([k, v]) => [Number(k), v.trim()]),
@@ -175,11 +208,22 @@ export function TemplatePicker({
     () => (selected ? collectVariableSlots(selected) : null),
     [selected],
   );
+  const mediaHeaderType = isMediaHeaderType(selected?.header_type)
+    ? selected!.header_type
+    : null;
+  const headerMediaError = useMemo<'missing' | 'invalid' | null>(() => {
+    if (!mediaHeaderType) return null;
+    const value = headerMediaUrl.trim();
+    if (!value) return 'missing';
+    if (!isValidHttpUrl(value)) return 'invalid';
+    return null;
+  }, [mediaHeaderType, headerMediaUrl]);
   const canConfirm =
     !!selected &&
     !!slots &&
     slots.bodyVars.every((_, i) => (params[i] ?? "").trim().length > 0) &&
     (slots.headerVarCount === 0 || headerText.trim().length > 0) &&
+    headerMediaError === null &&
     slots.urlButtonSlots.every(
       (s) => (buttonParams[s.index] ?? "").trim().length > 0,
     );
@@ -259,6 +303,36 @@ export function TemplatePicker({
                 </p>
               )}
             </div>
+            {mediaHeaderType && (
+              <div className="space-y-1">
+                <Label className="text-xs text-popover-foreground">
+                  {`Header media (${mediaHeaderType})`}
+                </Label>
+                <Input
+                  type="url"
+                  value={headerMediaUrl}
+                  onChange={(e) => setHeaderMediaUrl(e.target.value)}
+                  placeholder={`https://example.com/header.${
+                    mediaHeaderType === "image"
+                      ? "jpg"
+                      : mediaHeaderType === "video"
+                        ? "mp4"
+                        : "pdf"
+                  }`}
+                  className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Public URL of the {mediaHeaderType} sent as the message header.
+                </p>
+                {headerMediaError && (
+                  <p className="text-[10px] text-amber-400">
+                    {headerMediaError === "missing"
+                      ? "A media URL is required to send this template."
+                      : "Enter a valid http(s) URL."}
+                  </p>
+                )}
+              </div>
+            )}
             {slots && slots.headerVarCount > 0 && (
               <div className="space-y-1">
                 <Label className="text-xs text-popover-foreground">
