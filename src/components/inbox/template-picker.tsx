@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { MessageTemplate } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -20,8 +20,14 @@ import {
   ChevronRight,
   LayoutTemplate,
   Loader2,
+  Upload,
 } from "lucide-react";
 import { extractVariableIndices } from "@/lib/whatsapp/template-validators";
+import {
+  uploadAccountMedia,
+  MEDIA_MAX_BYTES_BY_KIND,
+} from "@/lib/storage/upload-media";
+import { toast } from "sonner";
 
 export interface TemplateSendValues {
   body: string[];
@@ -102,6 +108,8 @@ export function TemplatePicker({
   const [headerText, setHeaderText] = useState<string>("");
   const [headerMediaUrl, setHeaderMediaUrl] = useState<string>("");
   const [buttonParams, setButtonParams] = useState<Record<number, string>>({});
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const mediaFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -158,6 +166,26 @@ export function TemplatePicker({
   function handleOpenChange(next: boolean) {
     if (!next) resetSelection();
     onOpenChange(next);
+  }
+
+  async function handleMediaFile(file: File, kind: MediaHeaderType) {
+    const limit = MEDIA_MAX_BYTES_BY_KIND[kind];
+    if (file.size > limit) {
+      toast.error(
+        `File is ${(file.size / 1024 / 1024).toFixed(1)} MB — Meta's limit for ${kind} is ${(limit / 1024 / 1024).toFixed(0)} MB.`,
+      );
+      return;
+    }
+    setUploadingMedia(true);
+    try {
+      const { publicUrl } = await uploadAccountMedia("chat-media", file);
+      setHeaderMediaUrl(publicUrl);
+      toast.success("File uploaded.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploadingMedia(false);
+    }
   }
 
   function pickTemplate(template: MessageTemplate) {
@@ -308,6 +336,43 @@ export function TemplatePicker({
                 <Label className="text-xs text-popover-foreground">
                   {`Header media (${mediaHeaderType})`}
                 </Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={mediaFileRef}
+                    type="file"
+                    accept={
+                      mediaHeaderType === "image"
+                        ? "image/jpeg,image/png"
+                        : mediaHeaderType === "video"
+                          ? "video/mp4,video/3gpp"
+                          : "application/pdf"
+                    }
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleMediaFile(f, mediaHeaderType);
+                      e.target.value = "";
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingMedia}
+                    onClick={() => mediaFileRef.current?.click()}
+                    className="border-border text-popover-foreground hover:bg-muted"
+                  >
+                    {uploadingMedia ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    Upload {mediaHeaderType}
+                  </Button>
+                  <span className="text-[10px] text-muted-foreground">
+                    or paste a link below
+                  </span>
+                </div>
                 <Input
                   type="url"
                   value={headerMediaUrl}
@@ -321,9 +386,14 @@ export function TemplatePicker({
                   }`}
                   className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  Public URL of the {mediaHeaderType} sent as the message header.
-                </p>
+                {headerMediaUrl.trim() && mediaHeaderType === "image" && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={headerMediaUrl.trim()}
+                    alt="Header preview"
+                    className="max-h-32 rounded-md border border-border object-contain"
+                  />
+                )}
                 {headerMediaError && (
                   <p className="text-[10px] text-amber-400">
                     {headerMediaError === "missing"
