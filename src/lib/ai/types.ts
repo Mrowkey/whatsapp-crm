@@ -3,7 +3,7 @@
 //
 // One small provider-agnostic surface so the inbox draft route and the
 // inbound auto-reply bot both talk to `generateReply` without caring
-// whether the account is on OpenAI or Anthropic.
+// which provider the account is on.
 // ============================================================
 
 export type AiProvider = 'openai' | 'anthropic' | 'groq'
