@@ -55,6 +55,9 @@ import {
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
 const HEADER_FORMATS: HeaderFormat[] = ['none', 'text', 'image', 'video', 'document'];
+function headerFormatLabel(type: HeaderFormat): string {
+  return type === 'none' ? 'None' : type.charAt(0).toUpperCase() + type.slice(1);
+}
 
 const categoryColors: Record<string, string> = {
   Marketing: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
@@ -109,6 +112,13 @@ const COMMON_LANGUAGE_CODES = [
   'tr',
   'lt',
 ];
+
+const BUTTON_TYPE_LABEL: Record<TemplateButton['type'], string> = {
+  QUICK_REPLY: 'Quick Reply',
+  URL: 'URL',
+  PHONE_NUMBER: 'Phone',
+  COPY_CODE: 'Copy Code',
+};
 
 function emptyButton(type: TemplateButton['type']): TemplateButton {
   switch (type) {
@@ -756,7 +766,7 @@ export function TemplateManager() {
                 }
               >
                 <SelectTrigger className="w-full bg-muted border-border text-foreground">
-                  <SelectValue />
+                  <SelectValue>{(v: HeaderFormat) => headerFormatLabel(v)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-popover border-border">
                   {HEADER_FORMATS.map((type) => (
@@ -765,9 +775,7 @@ export function TemplateManager() {
                       value={type}
                       className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
                     >
-                      {type === 'none'
-                        ? 'None'
-                        : type.charAt(0).toUpperCase() + type.slice(1)}
+                      {headerFormatLabel(type)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -960,32 +968,34 @@ export function TemplateManager() {
                           }}
                         >
                           <SelectTrigger className="w-40 bg-muted border-border text-foreground h-8 text-xs">
-                            <SelectValue />
+                            <SelectValue>
+                              {(v: TemplateButton['type']) => BUTTON_TYPE_LABEL[v]}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent className="bg-popover border-border">
                             <SelectItem
                               value="QUICK_REPLY"
                               className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
                             >
-                              Quick Reply
+                              {BUTTON_TYPE_LABEL.QUICK_REPLY}
                             </SelectItem>
                             <SelectItem
                               value="URL"
                               className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
                             >
-                              URL
+                              {BUTTON_TYPE_LABEL.URL}
                             </SelectItem>
                             <SelectItem
                               value="PHONE_NUMBER"
                               className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
                             >
-                              Phone
+                              {BUTTON_TYPE_LABEL.PHONE_NUMBER}
                             </SelectItem>
                             <SelectItem
                               value="COPY_CODE"
                               className="text-popover-foreground focus:bg-muted focus:text-popover-foreground"
                             >
-                              Copy Code
+                              {BUTTON_TYPE_LABEL.COPY_CODE}
                             </SelectItem>
                           </SelectContent>
                         </Select>
