@@ -247,7 +247,9 @@ export function AiConfig() {
                   disabled={disabled}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue>
+                      {(v: AiProvider) => PROVIDER_LABEL[v]}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="openai">{PROVIDER_LABEL.openai}</SelectItem>

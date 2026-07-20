@@ -426,7 +426,11 @@ export function MembersTab() {
                           className="w-32 bg-muted border-border text-foreground"
                           disabled={isBusy}
                         >
-                          <SelectValue />
+                          <SelectValue>
+                            {(v: AccountRole) =>
+                              EDITABLE_ROLES.find((r) => r.value === v)?.label ?? v
+                            }
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {EDITABLE_ROLES.map((r) => (
