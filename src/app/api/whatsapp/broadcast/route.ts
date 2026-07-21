@@ -217,11 +217,59 @@ export async function POST(request: Request) {
     }
     const templateRow = rawTemplateRow ?? null
 
+    // Guard against re-blasting someone who already got a broadcast
+    // template today — sending two different marketing templates to
+    // the same cold contact within hours of each other is exactly the
+    // pattern that trips Meta's "healthy ecosystem engagement" spam
+    // protection and drags down the account's quality rating. One
+    // batched lookup (contacts -> conversations -> recent bot template
+    // sends) rather than a per-recipient query.
+    const recentlyMessagedContactIds = new Set<string>()
+    const candidateContactIds = recipients
+      .map((r) => r.contactId)
+      .filter((id): id is string => !!id)
+    if (candidateContactIds.length > 0 && !body.allow_recent_resend) {
+      const { data: convs } = await supabase
+        .from('conversations')
+        .select('id, contact_id')
+        .eq('account_id', accountId)
+        .in('contact_id', candidateContactIds)
+      const convToContact = new Map(
+        (convs ?? []).map((c) => [c.id as string, c.contact_id as string]),
+      )
+      const convIds = [...convToContact.keys()]
+      if (convIds.length > 0) {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const { data: recentMsgs } = await supabase
+          .from('messages')
+          .select('conversation_id')
+          .in('conversation_id', convIds)
+          .eq('sender_type', 'bot')
+          .eq('content_type', 'template')
+          .gte('created_at', cutoff)
+        for (const m of recentMsgs ?? []) {
+          const contactId = convToContact.get(m.conversation_id as string)
+          if (contactId) recentlyMessagedContactIds.add(contactId)
+        }
+      }
+    }
+
     const results: BroadcastResult[] = []
     let sentCount = 0
     let failedCount = 0
 
     for (const recipient of recipients) {
+      if (recipient.contactId && recentlyMessagedContactIds.has(recipient.contactId)) {
+        results.push({
+          phone: recipient.phone,
+          status: 'failed',
+          error:
+            'Skipped — already sent a broadcast template to this contact in the last 24 hours (protects your Meta quality rating).',
+        })
+        failedCount++
+        continue
+      }
+
       const sanitized = sanitizePhoneForMeta(recipient.phone)
 
       if (!isValidE164(sanitized)) {

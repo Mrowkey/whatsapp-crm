@@ -21,6 +21,11 @@ export interface MetaPhoneInfo {
   display_phone_number: string
   verified_name?: string
   quality_rating?: string
+  /** Display-name review state: PENDING_REVIEW / APPROVED / DECLINED. */
+  name_status?: string
+  /** Business-initiated messaging cap tier. Absent until Meta has
+   *  assigned one (typically after the number's first real sends). */
+  messaging_limit_tier?: string
 }
 
 interface MetaErrorResponse {
@@ -55,7 +60,7 @@ export async function verifyPhoneNumber(
   args: VerifyPhoneNumberArgs
 ): Promise<MetaPhoneInfo> {
   const { phoneNumberId, accessToken } = args
-  const url = `${META_API_BASE}/${phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating`
+  const url = `${META_API_BASE}/${phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating,name_status,messaging_limit_tier`
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })

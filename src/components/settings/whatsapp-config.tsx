@@ -53,6 +53,12 @@ export function WhatsAppConfig() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [resetReason, setResetReason] = useState<ResetReason>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
+  const [quality, setQuality] = useState<{
+    quality_rating: string | null;
+    name_status: string | null;
+    messaging_limit_tier: string | null;
+  } | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
   // Guards against re-hydrating the form when the load effect below
   // re-runs for reasons unrelated to actually switching accounts —
   // e.g. Supabase's onAuthStateChange fires a token refresh (new
@@ -179,6 +185,28 @@ export function WhatsAppConfig() {
     loadedAccountIdRef.current = accountId;
     fetchConfig(accountId);
   }, [authLoading, profileLoading, user?.id, accountId, fetchConfig]);
+
+  // Live account-health read (quality rating / display-name approval /
+  // messaging tier) — separate from fetchConfig since it hits Meta
+  // directly on every load rather than reading Relay's own DB, and a
+  // slow/unavailable Meta shouldn't block the rest of this page.
+  useEffect(() => {
+    if (connectionStatus !== 'connected') return;
+    let cancelled = false;
+    setQualityLoading(true);
+    fetch('/api/whatsapp/quality')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.connected) setQuality(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setQualityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionStatus]);
 
   async function handleSave() {
     if (!phoneNumberId.trim()) {
@@ -553,6 +581,64 @@ export function WhatsAppConfig() {
                   </ul>
                 )}
               </div>
+            )}
+          </Alert>
+        )}
+
+        {/* Account health — quality rating / display-name approval /
+            messaging tier, read live from Meta on every page load so
+            an owner can self-monitor daily sending without leaving
+            Relay. Purely informational; absent while unconnected or
+            still loading. */}
+        {connectionStatus === 'connected' && (quality || qualityLoading) && (
+          <Alert
+            className={
+              quality?.quality_rating === 'GREEN'
+                ? 'bg-emerald-950/30 border-emerald-700/50'
+                : quality?.quality_rating === 'RED'
+                  ? 'bg-red-950/30 border-red-700/50'
+                  : quality?.quality_rating === 'YELLOW'
+                    ? 'bg-amber-950/30 border-amber-700/50'
+                    : 'bg-card border-border'
+            }
+          >
+            <div className="flex items-center gap-2">
+              {qualityLoading && !quality ? (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              ) : quality?.quality_rating === 'GREEN' ? (
+                <CheckCircle2 className="size-4 text-emerald-400" />
+              ) : quality?.quality_rating === 'RED' ? (
+                <XCircle className="size-4 text-red-400" />
+              ) : (
+                <AlertTriangle className="size-4 text-amber-400" />
+              )}
+              <AlertTitle className="text-foreground mb-0">
+                Account health
+              </AlertTitle>
+            </div>
+            {quality && (
+              <AlertDescription className="text-muted-foreground mt-2 text-xs leading-relaxed">
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <span>
+                    Quality rating:{' '}
+                    <strong className="text-foreground">
+                      {quality.quality_rating ?? 'Unknown'}
+                    </strong>
+                  </span>
+                  <span>
+                    Display name:{' '}
+                    <strong className="text-foreground">
+                      {quality.name_status ?? 'Unknown'}
+                    </strong>
+                  </span>
+                  <span>
+                    Messaging tier:{' '}
+                    <strong className="text-foreground">
+                      {quality.messaging_limit_tier ?? 'Not yet assigned (starts at 1,000/24h)'}
+                    </strong>
+                  </span>
+                </div>
+              </AlertDescription>
             )}
           </Alert>
         )}
