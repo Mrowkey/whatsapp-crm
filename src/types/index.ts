@@ -103,6 +103,15 @@ export interface Contact {
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the
    *  Inbox conversation list, for tag filtering). Absent otherwise. */
   tags?: Tag[];
+  /** Raw Meta `referral` payload from the click-to-WhatsApp ad that
+   *  brought this lead in, captured once at contact creation (migration
+   *  032). Null for contacts who reached out organically. */
+  ad_referral?: {
+    source_type?: string;
+    source_id?: string;
+    headline?: string;
+    ctwa_clid?: string;
+  } | null;
 }
 
 export interface Tag {

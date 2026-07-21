@@ -38,6 +38,7 @@ import {
   X,
   DollarSign,
   LayoutTemplate,
+  Megaphone,
 } from 'lucide-react';
 
 interface ContactDetailViewProps {
@@ -432,6 +433,15 @@ export function ContactDetailView({
                       <span className="flex items-center gap-1">
                         <Building2 className="size-3" />
                         {contact.company}
+                      </span>
+                    )}
+                    {contact.ad_referral && (
+                      <span
+                        className="flex items-center gap-1"
+                        title={contact.ad_referral.headline || 'Came in via a click-to-WhatsApp ad'}
+                      >
+                        <Megaphone className="size-3" />
+                        Via ad
                       </span>
                     )}
                   </div>

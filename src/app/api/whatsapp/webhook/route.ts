@@ -67,6 +67,25 @@ interface WhatsAppMessage {
   button?: { payload?: string; text: string }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
+  /**
+   * Present on the first inbound message from a lead who tapped a
+   * click-to-WhatsApp ad (Meta/Instagram "Send Message" ads) —
+   * `source_id` is the ad id, `ctwa_clid` is Meta's click id for later
+   * Conversions API attribution. Stored as-is on the new contact row;
+   * never present on a returning contact's later messages.
+   */
+  referral?: {
+    source_url?: string
+    source_type?: string
+    source_id?: string
+    headline?: string
+    body?: string
+    media_type?: string
+    image_url?: string
+    video_url?: string
+    thumbnail_url?: string
+    ctwa_clid?: string
+  }
 }
 
 interface WhatsAppWebhookEntry {
@@ -622,7 +641,8 @@ async function processMessage(
     accountId,
     configOwnerUserId,
     senderPhone,
-    contactName
+    contactName,
+    message.referral
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
@@ -1030,7 +1050,8 @@ async function findOrCreateContact(
   accountId: string,
   configOwnerUserId: string,
   phone: string,
-  name: string
+  name: string,
+  adReferral?: WhatsAppMessage['referral']
 ): Promise<ContactOutcome | null> {
   // Find an existing contact for this account by phone. The shared
   // helper pre-filters in SQL by the last-8-digit suffix (so we don't
@@ -1073,6 +1094,7 @@ async function findOrCreateContact(
       user_id: configOwnerUserId,
       phone,
       name: name || phone,
+      ad_referral: adReferral ?? null,
     })
     .select()
     .single()
