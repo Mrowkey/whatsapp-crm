@@ -291,6 +291,7 @@ export async function POST(request: Request) {
               conversation_id: conversationId,
               sender_type: 'bot',
               content_type: 'template',
+              content_text: templateRow?.body_text ?? null,
               template_name,
               message_id: sentMessageId,
               status: 'sent',
