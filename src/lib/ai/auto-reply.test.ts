@@ -10,7 +10,7 @@ const h = vi.hoisted(() => ({
   engineSendText: vi.fn(),
   state: {
     conv: null as Record<string, unknown> | null,
-    autoResponders: [] as { id: string }[],
+    autoResponders: [] as { id: string; trigger_type: string; trigger_config: unknown }[],
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
     rpcCalls: [] as { name: string; args: unknown }[],
@@ -28,13 +28,11 @@ vi.mock('./admin-client', () => ({
   supabaseAdmin: () => ({
     from: (table: string) => {
       if (table === 'automations') {
-        // .select().eq().eq().in().limit() → active auto-responders
+        // .select().eq().eq().in() → active auto-responders
         const chain = {
           select: () => chain,
           eq: () => chain,
-          in: () => chain,
-          limit: () =>
-            Promise.resolve({ data: h.state.autoResponders, error: null }),
+          in: () => Promise.resolve({ data: h.state.autoResponders, error: null }),
         }
         return chain
       }
@@ -66,6 +64,7 @@ const ARGS = {
   conversationId: 'conv-1',
   contactId: 'contact-1',
   configOwnerUserId: 'user-1',
+  messageText: 'hi',
 }
 
 function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
@@ -117,11 +116,38 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     )
   })
 
-  it('stands down when an active message-level automation exists', async () => {
-    h.state.autoResponders = [{ id: 'auto-1' }]
+  it('stands down when an active new_message_received automation exists (fires on every message)', async () => {
+    h.state.autoResponders = [
+      { id: 'auto-1', trigger_type: 'new_message_received', trigger_config: {} },
+    ]
     await dispatchInboundToAiReply(ARGS)
     expect(h.runAgenticReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('stands down when an active keyword_match automation matches this message', async () => {
+    h.state.autoResponders = [
+      {
+        id: 'auto-1',
+        trigger_type: 'keyword_match',
+        trigger_config: { keywords: ['hi'], match_type: 'contains' },
+      },
+    ]
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.runAgenticReply).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('does NOT stand down when an active keyword_match automation does not match this message', async () => {
+    h.state.autoResponders = [
+      {
+        id: 'auto-1',
+        trigger_type: 'keyword_match',
+        trigger_config: { keywords: ['send brochure'], match_type: 'contains' },
+      },
+    ]
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalled()
   })
 
   it('does not send when the atomic slot claim loses the race', async () => {

@@ -4,6 +4,8 @@ import { buildConversationContext, buildCrmContext } from './context'
 import { runAgenticReply } from './agent'
 import { buildSystemPrompt } from './defaults'
 import { engineSendText } from '@/lib/flows/meta-send'
+import { triggerMatches } from '@/lib/automations/engine'
+import type { Automation } from '@/types'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -13,6 +15,10 @@ interface DispatchArgs {
   /** The account's WhatsApp config owner, used for the outbound send's
    *  audit columns (mirrors how the flow runner passes it through). */
   configOwnerUserId: string
+  /** Raw inbound text, used only to check whether an active
+   *  keyword_match automation actually fires on THIS message (see
+   *  standdown check below). */
+  messageText: string
 }
 
 /**
@@ -37,7 +43,7 @@ interface DispatchArgs {
 export async function dispatchInboundToAiReply(
   args: DispatchArgs,
 ): Promise<void> {
-  const { accountId, conversationId, contactId, configOwnerUserId } = args
+  const { accountId, conversationId, contactId, configOwnerUserId, messageText } = args
 
   try {
     const db = supabaseAdmin()
@@ -49,18 +55,24 @@ export async function dispatchInboundToAiReply(
     // caller already excludes messages a Flow consumed. Message-level
     // automations (`new_message_received` / `keyword_match`) are
     // dispatched independently for this same inbound and may send their
-    // own reply, so if the account has any active one we stand down to
-    // avoid double-texting the customer. (Relationship triggers like
-    // `first_inbound_message` don't count — they're not per-message
-    // auto-responders.)
+    // own reply, so we stand down for any one that will actually FIRE on
+    // this message, to avoid double-texting the customer. `new_message_received`
+    // always fires (every inbound), so its mere presence stands us down;
+    // `keyword_match` only stands us down when its own keywords actually
+    // match this message's text — an unrelated keyword automation being
+    // active elsewhere on the account must not silence the AI for every
+    // other conversation. (Relationship triggers like `first_inbound_message`
+    // don't count — they're not per-message auto-responders.)
     const { data: autoResponders } = await db
       .from('automations')
-      .select('id')
+      .select('id, trigger_type, trigger_config')
       .eq('account_id', accountId)
       .eq('is_active', true)
       .in('trigger_type', ['new_message_received', 'keyword_match'])
-      .limit(1)
-    if (autoResponders && autoResponders.length > 0) return
+    const standDown = (autoResponders ?? []).some((a) =>
+      triggerMatches(a as unknown as Automation, { message_text: messageText }),
+    )
+    if (standDown) return
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
