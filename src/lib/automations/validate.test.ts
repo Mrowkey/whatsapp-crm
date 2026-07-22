@@ -92,6 +92,33 @@ describe("validateStepsForActivation", () => {
     );
   });
 
+  it("validates send_media kind and URL", () => {
+    const good = validateStepsForActivation([
+      {
+        step_type: "send_media",
+        step_config: { kind: "document", media_url: "https://cdn.example.com/brochure.pdf" },
+      },
+    ]);
+    expect(good).toEqual([]);
+
+    const badKind = validateStepsForActivation([
+      { step_type: "send_media", step_config: { kind: "audio", media_url: "https://x.com/a.pdf" } },
+    ]);
+    expect(badKind.map((i) => i.message)).toContain(
+      "media kind must be image, video, or document",
+    );
+
+    const noUrl = validateStepsForActivation([
+      { step_type: "send_media", step_config: { kind: "image" } },
+    ]);
+    expect(noUrl.map((i) => i.message)).toContain("media URL is required");
+
+    const garbage = validateStepsForActivation([
+      { step_type: "send_media", step_config: { kind: "image", media_url: "not a url" } },
+    ]);
+    expect(garbage.map((i) => i.message)).toContain("media URL is not a valid URL");
+  });
+
   it("validates assign_conversation only when mode is 'specific'", () => {
     const roundRobinNoAgent = validateStepsForActivation([
       {

@@ -63,6 +63,23 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
         issues.push({ path: `${path}.template_name`, message: 'template name is required' })
       }
       break
+    case 'send_media':
+      if (!['image', 'video', 'document'].includes(String(c.kind))) {
+        issues.push({ path: `${path}.kind`, message: 'media kind must be image, video, or document' })
+      }
+      if (!nonEmpty(c.media_url)) {
+        issues.push({ path: `${path}.media_url`, message: 'media URL is required' })
+        break
+      }
+      try {
+        const u = new URL(String(c.media_url))
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+          issues.push({ path: `${path}.media_url`, message: 'media URL must use http or https' })
+        }
+      } catch {
+        issues.push({ path: `${path}.media_url`, message: 'media URL is not a valid URL' })
+      }
+      break
     case 'add_tag':
     case 'remove_tag':
       if (!nonEmpty(c.tag_id)) {

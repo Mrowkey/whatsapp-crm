@@ -93,9 +93,11 @@ vi.mock("./admin-client", () => {
 vi.mock("./meta-send", () => ({
   engineSendText: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
   engineSendTemplate: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
+  engineSendMedia: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
 }));
 
 import { runAutomationsForTrigger } from "./engine";
+import { engineSendMedia } from "./meta-send";
 
 const ACCOUNT = "acct-1";
 
@@ -224,6 +226,33 @@ describe("update_contact_field — custom fields", () => {
   });
 });
 
+describe("send_media step", () => {
+  it("calls engineSendMedia with the step's kind/url/caption and an interpolated caption", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [mediaStep()];
+
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: { conversation_id: "conv-1", vars: { name: "Rohan" } },
+    });
+
+    expect(engineSendMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: ACCOUNT,
+        conversationId: "conv-1",
+        contactId: "c1",
+        mediaKind: "document",
+        mediaUrl: "https://cdn.example.com/brochure.pdf",
+        caption: "Here you go, Rohan!",
+        filename: "Brochure.pdf",
+      }),
+    );
+  });
+});
+
 function automationWithUpdateStep() {
   return {
     id: "a1",
@@ -243,6 +272,22 @@ function updateStep() {
     position: 0,
     parent_step_id: null,
     step_config: { field: "company", value: "pwned-by-automation" },
+  };
+}
+
+function mediaStep() {
+  return {
+    id: "s1",
+    automation_id: "a1",
+    step_type: "send_media",
+    position: 0,
+    parent_step_id: null,
+    step_config: {
+      kind: "document",
+      media_url: "https://cdn.example.com/brochure.pdf",
+      caption: "Here you go, {{ vars.name }}!",
+      filename: "Brochure.pdf",
+    },
   };
 }
 
