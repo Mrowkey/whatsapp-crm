@@ -25,6 +25,8 @@ interface AudienceConfig {
 interface Step4Props {
   name: string;
   onNameChange: (name: string) => void;
+  tagName: string;
+  onTagNameChange: (tagName: string) => void;
   template: MessageTemplate;
   audience: AudienceConfig;
   onSend: () => void;
@@ -37,6 +39,8 @@ interface Step4Props {
 export function Step4ScheduleSend({
   name,
   onNameChange,
+  tagName,
+  onTagNameChange,
   template,
   audience,
   onSend,
@@ -48,6 +52,16 @@ export function Step4ScheduleSend({
   const [showConfirm, setShowConfirm] = useState(false);
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
+  const [existingTagNames, setExistingTagNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function loadTags() {
+      const supabase = createClient();
+      const { data } = await supabase.from('tags').select('name').order('name');
+      setExistingTagNames((data ?? []).map((t) => t.name));
+    }
+    loadTags();
+  }, []);
 
   useEffect(() => {
     async function calculateReach() {
@@ -108,6 +122,32 @@ export function Step4ScheduleSend({
           placeholder="e.g. Summer Sale Announcement"
           className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
         />
+      </div>
+
+      {/* Partition tag — applied to every recipient regardless of send
+          outcome, so you can filter/broadcast to just this group later
+          (Contacts -> Filter by tags, or a future Broadcast audience). */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-foreground">
+          Tag recipients as <span className="font-normal text-muted-foreground">(optional)</span>
+        </label>
+        <Input
+          value={tagName}
+          onChange={(e) => onTagNameChange(e.target.value)}
+          placeholder="e.g. Godrej Rivershore Estate (Nagpur)"
+          list="existing-tag-names"
+          className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
+        />
+        <datalist id="existing-tag-names">
+          {existingTagNames.map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Creates the tag if it doesn&apos;t exist yet. Every recipient gets it, whether or not
+          the message actually goes through — this is how you build a project/campaign
+          partition for later filtering.
+        </p>
       </div>
 
       {/* Summary Card */}

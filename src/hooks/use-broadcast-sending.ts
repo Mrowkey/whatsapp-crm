@@ -46,6 +46,15 @@ interface BroadcastPayload {
    * falls back to the template's stored URL only when this is empty.
    */
   headerMediaUrl?: string;
+  /**
+   * Optional "partition" tag applied to every resolved recipient,
+   * whether or not the send itself succeeds — this records "we
+   * contacted them about X", independent of delivery/reply status.
+   * Creates the tag if it doesn't already exist. Applied right after
+   * the audience is resolved so it lands even if the send loop fails
+   * partway through.
+   */
+  tagName?: string;
 }
 
 interface UseBroadcastSendingReturn {
@@ -349,6 +358,45 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
 
       if (contacts.length === 0) {
         throw new Error('No contacts found for this audience.');
+      }
+
+      // ── Step 1b: Apply the partition tag, if one was chosen ───────
+      // Done before any sending starts so it lands even if the send
+      // loop later fails partway through — "we targeted them with
+      // this campaign" is true regardless of delivery outcome.
+      const tagName = payload.tagName?.trim();
+      if (tagName) {
+        let { data: tag } = await supabase
+          .from('tags')
+          .select('id')
+          .eq('account_id', accountId)
+          .eq('name', tagName)
+          .maybeSingle();
+
+        if (!tag) {
+          const { data: newTag, error: tagCreateError } = await supabase
+            .from('tags')
+            .insert({ account_id: accountId, user_id: user.id, name: tagName })
+            .select('id')
+            .single();
+          if (tagCreateError) {
+            throw new Error(`Failed to create tag "${tagName}": ${tagCreateError.message}`);
+          }
+          tag = newTag;
+        }
+
+        const tagRows = contacts.map((c) => ({ contact_id: c.id, tag_id: tag!.id }));
+        for (let i = 0; i < tagRows.length; i += INSERT_BATCH_SIZE) {
+          const chunk = tagRows.slice(i, i + INSERT_BATCH_SIZE);
+          // ignoreDuplicates — contact_tags has a UNIQUE(contact_id, tag_id);
+          // resending to an already-tagged contact should no-op, not error.
+          const { error: tagApplyError } = await supabase
+            .from('contact_tags')
+            .upsert(chunk, { onConflict: 'contact_id,tag_id', ignoreDuplicates: true });
+          if (tagApplyError) {
+            throw new Error(`Failed to apply tag "${tagName}": ${tagApplyError.message}`);
+          }
+        }
       }
 
       // ── Step 2: Create broadcast row ──────────────────────────────
