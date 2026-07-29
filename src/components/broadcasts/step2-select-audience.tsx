@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CustomField, Tag } from '@/types';
 import { Button } from '@/components/ui/button';
+import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
 import {
   Users,
   Tags,
@@ -13,6 +14,8 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
+  FileText,
+  AlertTriangle,
 } from 'lucide-react';
 
 type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
@@ -89,6 +92,31 @@ export function Step2SelectAudience({
   const [loadingFields, setLoadingFields] = useState(false);
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null);
   const [loadingCount, setLoadingCount] = useState(false);
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCsvFile = useCallback(
+    async (file: File) => {
+      setCsvError(null);
+      const text = await file.text();
+      const { rows } = parseContactCsv(text);
+      if (rows.length === 0) {
+        setCsvFileName(null);
+        setCsvError(
+          'No valid rows found — make sure the file has a header row with a "phone" column.',
+        );
+        onUpdate({ ...audience, csvContacts: undefined });
+        return;
+      }
+      setCsvFileName(file.name);
+      onUpdate({
+        ...audience,
+        csvContacts: rows.map((r) => ({ phone: r.phone, name: r.name })),
+      });
+    },
+    [audience, onUpdate],
+  );
 
   // Tags are used both by the primary "Filter by Tags" audience type
   // AND by the exclude-list below — so always load once on mount.
@@ -384,6 +412,53 @@ export function Step2SelectAudience({
                 placeholder="Value"
                 className="h-9 rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
               />
+            </div>
+          )}
+        </div>
+      )}
+
+      {audience.type === 'csv' && (
+        <div className="space-y-3 rounded-xl border border-border bg-card/50 p-4">
+          <p className="text-sm font-medium text-foreground">Upload phone numbers</p>
+          <p className="text-xs text-muted-foreground">
+            CSV file with a header row. Needs a <code className="rounded bg-muted px-1">phone</code>{' '}
+            column; a <code className="rounded bg-muted px-1">name</code> column is optional.
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleCsvFile(file);
+              e.target.value = '';
+            }}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Upload className="h-4 w-4" />
+            Choose CSV file
+          </Button>
+
+          {csvFileName && !csvError && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-foreground">
+              <FileText className="h-3.5 w-3.5 text-primary" />
+              <span className="truncate">{csvFileName}</span>
+              <span className="text-muted-foreground">
+                · {audience.csvContacts?.length ?? 0} number
+                {(audience.csvContacts?.length ?? 0) === 1 ? '' : 's'}
+              </span>
+            </div>
+          )}
+
+          {csvError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{csvError}</span>
             </div>
           )}
         </div>
