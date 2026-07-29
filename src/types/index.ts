@@ -98,6 +98,14 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
+  /**
+   * Explicit consent to receive WhatsApp messages. Defaults true for
+   * organically-created contacts (an inbound message is itself an
+   * implied consent signal); CSV/bulk imports set this based on the
+   * importer's explicit confirmation, and Broadcasts refuse to send
+   * to anyone with this false.
+   */
+  opted_in?: boolean;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

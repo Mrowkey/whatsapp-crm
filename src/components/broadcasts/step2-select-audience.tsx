@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CustomField, Tag } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
 import {
   Users,
@@ -32,6 +33,7 @@ interface AudienceConfig {
   tagIds?: string[];
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
+  csvConsentConfirmed?: boolean;
   excludeTagIds?: string[];
 }
 
@@ -272,7 +274,8 @@ export function Step2SelectAudience({
       audience.customField.value.length > 0) ||
     (audience.type === 'csv' &&
       audience.csvContacts &&
-      audience.csvContacts.length > 0);
+      audience.csvContacts.length > 0 &&
+      audience.csvConsentConfirmed === true);
 
   return (
     <div className="space-y-6">
@@ -460,6 +463,26 @@ export function Step2SelectAudience({
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{csvError}</span>
             </div>
+          )}
+
+          {audience.csvContacts && audience.csvContacts.length > 0 && (
+            <label className="flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs">
+              <Checkbox
+                checked={audience.csvConsentConfirmed ?? false}
+                onCheckedChange={(v) =>
+                  onUpdate({ ...audience, csvConsentConfirmed: v === true })
+                }
+                className="mt-0.5"
+              />
+              <span className="text-foreground">
+                I confirm every number in this file has consented to receive WhatsApp
+                messages from this business.{' '}
+                <span className="text-muted-foreground">
+                  Required before sending — messaging non-opted-in numbers is what
+                  triggers Meta&apos;s anti-spam blocks and account locks.
+                </span>
+              </span>
+            </label>
           )}
         </div>
       )}

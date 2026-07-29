@@ -18,6 +18,14 @@ export interface AudienceConfig {
   tagIds?: string[];
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
+  /**
+   * True only when the wizard user explicitly confirmed every contact
+   * in the uploaded CSV has consented to receive WhatsApp messages.
+   * Drives the `opted_in` flag on any newly-created contact from this
+   * audience — contacts that already existed keep their prior status
+   * regardless of this flag.
+   */
+  csvConsentConfirmed?: boolean;
   /** Contacts carrying any of these tags are subtracted from the result. */
   excludeTagIds?: string[];
 }
@@ -167,7 +175,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     let contacts: Contact[] = [];
 
     if (audience.type === 'all') {
-      const { data, error } = await supabase.from('contacts').select('*');
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('opted_in', true);
       if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
       contacts = data ?? [];
     } else if (
@@ -190,14 +201,25 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         const { data, error } = await supabase
           .from('contacts')
           .select('*')
-          .in('id', uniqueContactIds);
+          .in('id', uniqueContactIds)
+          .eq('opted_in', true);
         if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
         contacts = data ?? [];
       }
     } else if (audience.type === 'custom_field' && audience.customField) {
       contacts = await resolveCustomFieldAudience(supabase, audience.customField);
     } else if (audience.type === 'csv' && audience.csvContacts) {
-      contacts = await upsertCsvContacts(supabase, audience.csvContacts);
+      contacts = await upsertCsvContacts(
+        supabase,
+        audience.csvContacts,
+        audience.csvConsentConfirmed ?? false,
+      );
+      // Newly-created rows are opted_in per the confirmation above, but
+      // rows that already existed keep whatever opted_in status they
+      // already had — a prior import's "not confirmed" flag must not
+      // be silently overridden just because this CSV re-references the
+      // same phone number.
+      contacts = contacts.filter((c) => c.opted_in !== false);
     }
 
     // Apply exclude tags (works across all contact-derived audience
@@ -228,6 +250,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
   async function upsertCsvContacts(
     supabase: ReturnType<typeof createClient>,
     csvRows: { phone: string; name?: string }[],
+    consentConfirmed: boolean,
   ): Promise<Contact[]> {
     if (csvRows.length === 0) return [];
 
@@ -273,6 +296,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         account_id: accountId,
         phone,
         name: uniqueByPhone.get(phone)?.name ?? null,
+        opted_in: consentConfirmed,
       }));
 
     const INSERT_CHUNK = 200;
@@ -324,7 +348,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     const { data, error } = await supabase
       .from('contacts')
       .select('*')
-      .in('id', contactIds);
+      .in('id', contactIds)
+      .eq('opted_in', true);
     if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
     return data ?? [];
   }

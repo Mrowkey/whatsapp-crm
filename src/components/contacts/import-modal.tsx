@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -17,6 +17,7 @@ import {
   resolveImportTagIds,
   type ContactTagAssignment,
 } from '@/lib/contacts/resolve-import-tags';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils';
 import { toast } from 'sonner';
@@ -135,6 +136,9 @@ export function ImportModal({
   const [tagColorByKey, setTagColorByKey] = useState<Map<string, string>>(
     new Map()
   );
+  const [consentConfirmed, setConsentConfirmed] = useState(false);
+  const [projectTag, setProjectTag] = useState('');
+  const [existingTagNames, setExistingTagNames] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{
     imported: number;
@@ -151,8 +155,26 @@ export function ImportModal({
     setHasCompanyColumn(false);
     setTagColorByKey(new Map());
     setResult(null);
+    setConsentConfirmed(false);
+    setProjectTag('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
+
+  useEffect(() => {
+    if (!open || !accountId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('tags')
+        .select('name')
+        .eq('account_id', accountId)
+        .order('name');
+      if (!cancelled) setExistingTagNames((data ?? []).map((t) => t.name));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, accountId, supabase]);
 
   function handleOpenChange(next: boolean) {
     if (!next) reset();
@@ -252,13 +274,27 @@ export function ImportModal({
           .filter((p): p is string => !!p)
       );
 
-      const toInsert = unique.filter((row) => {
+      const toInsertRaw = unique.filter((row) => {
         if (existing.has(normalizeKey(row.phone))) {
           skipped++;
           return false;
         }
         return true;
       });
+
+      // Merge the whole-file project tag (if any) onto every row's own
+      // per-row `tags` column values, so a single upload can carry both
+      // a project-level tag and per-contact tags without either
+      // clobbering the other.
+      const trimmedProjectTag = projectTag.trim();
+      const toInsert = trimmedProjectTag
+        ? toInsertRaw.map((row) => ({
+            ...row,
+            tagNames: row.tagNames.includes(trimmedProjectTag)
+              ? row.tagNames
+              : [...row.tagNames, trimmedProjectTag],
+          }))
+        : toInsertRaw;
 
       // 3) Resolve tag names → ids (admin+ may auto-create missing tags).
       //    Skip the round-trip when the import carries no tag names.
@@ -290,6 +326,7 @@ export function ImportModal({
           name: row.name || null,
           email: row.email || null,
           company: row.company || null,
+          opted_in: consentConfirmed,
         }));
 
         const { data, error } = await supabase
@@ -501,6 +538,31 @@ export function ImportModal({
             onChange={handleFileChange}
             className="hidden"
           />
+
+          <div>
+            <label className="mb-1.5 block text-xs text-muted-foreground">
+              Tag these contacts as{' '}
+              <span className="font-normal">(optional — e.g. a project name)</span>
+            </label>
+            <input
+              type="text"
+              value={projectTag}
+              onChange={(e) => setProjectTag(e.target.value)}
+              placeholder="e.g. Godrej Greenfront Pune"
+              list="import-existing-tag-names"
+              className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <datalist id="import-existing-tag-names">
+              {existingTagNames.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Every contact in this file gets this tag too, on top of any per-row{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">tags</code>{' '}
+              column — use it to keep each project&apos;s upload filterable later.
+            </p>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -644,6 +706,25 @@ export function ImportModal({
               </div>
             </div>
           )}
+
+          {parsedRows.length > 0 && !result && (
+            <label className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-sm">
+              <Checkbox
+                checked={consentConfirmed}
+                onCheckedChange={(v) => setConsentConfirmed(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-popover-foreground">
+                I confirm every contact in this file has consented to receive WhatsApp
+                messages from this business.{' '}
+                <span className="text-muted-foreground">
+                  Messaging people who never opted in is what triggers Meta&apos;s
+                  anti-spam blocks and account locks — Relay will exclude any contact
+                  imported without this confirmed from future broadcasts.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         <DialogFooter className="mt-0 shrink-0 gap-2 border-t border-border/80 bg-background/50 px-6 py-4 sm:justify-end">
@@ -658,7 +739,7 @@ export function ImportModal({
           {!result && (
             <Button
               type="button"
-              disabled={parsedRows.length === 0 || importing}
+              disabled={parsedRows.length === 0 || importing || !consentConfirmed}
               onClick={handleImport}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
