@@ -214,17 +214,41 @@ export function Step2SelectAudience({
       }
 
       if (baseIds) {
-        const effective = [...baseIds].filter(
-          (id) => !excludeSet?.has(id),
-        );
-        setEstimatedCount(effective.length);
+        const effective = [...baseIds].filter((id) => !excludeSet?.has(id));
+        if (effective.length === 0) {
+          setEstimatedCount(0);
+        } else {
+          // Broadcasts only ever send to opted-in contacts (see
+          // use-broadcast-sending.ts) — this estimate must match that,
+          // otherwise the wizard promises a reach the actual send won't
+          // deliver.
+          const { count } = await supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true })
+            .in('id', effective)
+            .eq('opted_in', true);
+          setEstimatedCount(count ?? 0);
+        }
       } else {
-        // "All" — fetch the total, then subtract exclude set if any.
-        const { count } = await supabase
+        // "All" — fetch the opted-in total, then subtract exclude set if any.
+        let q = supabase
           .from('contacts')
-          .select('*', { count: 'exact', head: true });
-        const total = count ?? 0;
-        setEstimatedCount(excludeSet ? Math.max(0, total - excludeSet.size) : total);
+          .select('*', { count: 'exact', head: true })
+          .eq('opted_in', true);
+        // Excludes still need to be subtracted; cheapest correct way
+        // without pulling every id client-side is a second count of the
+        // opted-in-and-excluded overlap, then subtract.
+        const { count: total } = await q;
+        if (excludeSet && excludeSet.size > 0) {
+          const { count: excludedOptedIn } = await supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true })
+            .eq('opted_in', true)
+            .in('id', [...excludeSet]);
+          setEstimatedCount(Math.max(0, (total ?? 0) - (excludedOptedIn ?? 0)));
+        } else {
+          setEstimatedCount(total ?? 0);
+        }
       }
     } finally {
       setLoadingCount(false);

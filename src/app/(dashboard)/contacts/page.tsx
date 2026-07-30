@@ -91,6 +91,12 @@ export default function ContactsPage() {
   // Bulk selection (page-scoped — only the loaded rows are selectable)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  // True once the user clicks "Select all N matching contacts" after
+  // already selecting every row on the current page — expands the bulk
+  // action from "this page" to "every contact matching the current
+  // search/tag filter", without requiring the ids to be loaded
+  // client-side page by page.
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
 
   // All tags for display
   const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
@@ -123,6 +129,7 @@ export default function ContactsPage() {
     // referred to the old page/search results so the bulk bar can't
     // act on rows the user can no longer see.
     setSelected(new Set());
+    setSelectAllMatching(false);
 
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -293,19 +300,76 @@ export default function ContactsPage() {
     });
   }
 
+  /**
+   * Resolves every contact id matching the current search/tag filter —
+   * not just the loaded page — for "select all N matching" deletes.
+   * Batches the tag-filtered path's id list into chunks before the
+   * delete call; a single huge `.in()` clause has previously overflowed
+   * PostgREST's URL length (see the 543/1102-contact incidents earlier
+   * this session) and silently dropped rows.
+   */
+  async function deleteAllMatchingFilter(): Promise<number> {
+    const term = search.trim();
+
+    if (selectedTagIds.length === 0) {
+      let query = supabase.from('contacts').delete({ count: 'exact' });
+      if (term) {
+        const like = `%${term}%`;
+        query = query.or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`);
+      }
+      const { error, count } = await query;
+      if (error) throw error;
+      return count ?? 0;
+    }
+
+    // Tag filter active — resolve matching ids via the same RPC the
+    // list view uses, paging through until exhausted, then delete in
+    // chunks well under any URL-length limit.
+    const matchingIds: string[] = [];
+    const RPC_PAGE = 500;
+    for (let offset = 0; ; offset += RPC_PAGE) {
+      const { data, error } = await supabase.rpc('filter_contacts_by_tags', {
+        p_tag_ids: selectedTagIds,
+        p_search: term || null,
+        p_limit: RPC_PAGE,
+        p_offset: offset,
+      });
+      if (error) throw error;
+      const rows = (data ?? []) as { contact: Contact; total_count: number }[];
+      if (rows.length === 0) break;
+      matchingIds.push(...rows.map((r) => r.contact.id));
+      if (rows.length < RPC_PAGE) break;
+    }
+
+    const DELETE_CHUNK = 200;
+    for (let i = 0; i < matchingIds.length; i += DELETE_CHUNK) {
+      const chunk = matchingIds.slice(i, i + DELETE_CHUNK);
+      const { error } = await supabase.from('contacts').delete().in('id', chunk);
+      if (error) throw error;
+    }
+    return matchingIds.length;
+  }
+
   async function handleBulkDelete() {
-    const ids = [...selected];
-    if (ids.length === 0) return;
     setDeleting(true);
 
-    const { error } = await supabase.from('contacts').delete().in('id', ids);
-
-    if (error) {
-      toast.error('Failed to delete contacts');
-    } else {
-      toast.success(`${ids.length} contact${ids.length === 1 ? '' : 's'} deleted`);
+    try {
+      if (selectAllMatching) {
+        const count = await deleteAllMatchingFilter();
+        toast.success(`${count} contact${count === 1 ? '' : 's'} deleted`);
+      } else {
+        const ids = [...selected];
+        if (ids.length === 0) return;
+        const { error } = await supabase.from('contacts').delete().in('id', ids);
+        if (error) throw error;
+        toast.success(`${ids.length} contact${ids.length === 1 ? '' : 's'} deleted`);
+      }
       setSelected(new Set());
+      setSelectAllMatching(false);
+      setPage(0);
       fetchContacts();
+    } catch {
+      toast.error('Failed to delete contacts');
     }
 
     setDeleting(false);
@@ -498,31 +562,51 @@ export default function ContactsPage() {
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-4 py-2">
-          <p className="text-sm text-foreground">
-            <span className="font-medium">{selected.size}</span>{' '}
-            {selected.size === 1 ? 'contact' : 'contacts'} selected
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelected(new Set())}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Clear
-            </Button>
-            <GatedButton
-              variant="destructive"
-              size="sm"
-              canAct={canEdit}
-              gateReason="delete contacts"
-              onClick={() => setBulkDeleteOpen(true)}
-            >
-              <Trash2 className="size-4" />
-              Delete selected
-            </GatedButton>
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-foreground">
+              <span className="font-medium">
+                {selectAllMatching ? totalCount : selected.size}
+              </span>{' '}
+              {(selectAllMatching ? totalCount : selected.size) === 1
+                ? 'contact'
+                : 'contacts'}{' '}
+              selected
+              {selectAllMatching && hasActiveFilters && ' (matching current filter)'}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelected(new Set());
+                  setSelectAllMatching(false);
+                }}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </Button>
+              <GatedButton
+                variant="destructive"
+                size="sm"
+                canAct={canEdit}
+                gateReason="delete contacts"
+                onClick={() => setBulkDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                Delete selected
+              </GatedButton>
+            </div>
           </div>
+          {!selectAllMatching && allOnPageSelected && totalCount > contacts.length && (
+            <button
+              onClick={() => setSelectAllMatching(true)}
+              className="self-start text-xs font-medium text-primary hover:underline"
+            >
+              All {contacts.length} on this page are selected. Select all{' '}
+              {totalCount.toLocaleString()} matching contacts.
+            </button>
+          )}
         </div>
       )}
 
@@ -811,14 +895,24 @@ export default function ContactsPage() {
         <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-popover-foreground">
-              Delete {selected.size} {selected.size === 1 ? 'Contact' : 'Contacts'}
+              Delete {selectAllMatching ? totalCount : selected.size}{' '}
+              {(selectAllMatching ? totalCount : selected.size) === 1
+                ? 'Contact'
+                : 'Contacts'}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
               Are you sure you want to delete{' '}
               <span className="text-popover-foreground font-medium">
-                {selected.size} {selected.size === 1 ? 'contact' : 'contacts'}
+                {selectAllMatching ? totalCount : selected.size}{' '}
+                {(selectAllMatching ? totalCount : selected.size) === 1
+                  ? 'contact'
+                  : 'contacts'}
               </span>
-              ? This action cannot be undone.
+              {selectAllMatching && hasActiveFilters
+                ? ' matching your current search/tag filter'
+                : ''}
+              ? This also deletes their conversation and message history, and{' '}
+              <span className="text-popover-foreground font-medium">cannot be undone</span>.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="bg-popover border-border">
