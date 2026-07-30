@@ -310,44 +310,71 @@ export default function ContactsPage() {
    */
   async function deleteAllMatchingFilter(): Promise<number> {
     const term = search.trim();
+    const matchingIds: string[] = [];
 
     if (selectedTagIds.length === 0) {
-      let query = supabase.from('contacts').delete({ count: 'exact' });
-      if (term) {
-        const like = `%${term}%`;
-        query = query.or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`);
+      // Resolve matching ids a page at a time first — deleting 1000+
+      // contacts (and their cascading conversations/messages) in one
+      // request risks a statement timeout, which is what "Failed to
+      // delete contacts" was: the whole operation rolled back with no
+      // partial progress. Small batched deletes below avoid that.
+      const FETCH_PAGE = 500;
+      for (let offset = 0; ; offset += FETCH_PAGE) {
+        let query = supabase
+          .from('contacts')
+          .select('id')
+          .range(offset, offset + FETCH_PAGE - 1);
+        if (term) {
+          const like = `%${term}%`;
+          query = query.or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        const rows = data ?? [];
+        if (rows.length === 0) break;
+        matchingIds.push(...rows.map((r) => r.id));
+        if (rows.length < FETCH_PAGE) break;
       }
-      const { error, count } = await query;
-      if (error) throw error;
-      return count ?? 0;
+    } else {
+      // Tag filter active — resolve matching ids via the same RPC the
+      // list view uses, paging through until exhausted.
+      const RPC_PAGE = 500;
+      for (let offset = 0; ; offset += RPC_PAGE) {
+        const { data, error } = await supabase.rpc('filter_contacts_by_tags', {
+          p_tag_ids: selectedTagIds,
+          p_search: term || null,
+          p_limit: RPC_PAGE,
+          p_offset: offset,
+        });
+        if (error) throw error;
+        const rows = (data ?? []) as { contact: Contact; total_count: number }[];
+        if (rows.length === 0) break;
+        matchingIds.push(...rows.map((r) => r.contact.id));
+        if (rows.length < RPC_PAGE) break;
+      }
     }
 
-    // Tag filter active — resolve matching ids via the same RPC the
-    // list view uses, paging through until exhausted, then delete in
-    // chunks well under any URL-length limit.
-    const matchingIds: string[] = [];
-    const RPC_PAGE = 500;
-    for (let offset = 0; ; offset += RPC_PAGE) {
-      const { data, error } = await supabase.rpc('filter_contacts_by_tags', {
-        p_tag_ids: selectedTagIds,
-        p_search: term || null,
-        p_limit: RPC_PAGE,
-        p_offset: offset,
-      });
-      if (error) throw error;
-      const rows = (data ?? []) as { contact: Contact; total_count: number }[];
-      if (rows.length === 0) break;
-      matchingIds.push(...rows.map((r) => r.contact.id));
-      if (rows.length < RPC_PAGE) break;
-    }
-
-    const DELETE_CHUNK = 200;
+    // Delete in small chunks — well under any URL-length limit (see the
+    // 543/1102-contact tagging incidents earlier this session) AND small
+    // enough per-request that a cascade into messages/conversations
+    // can't time out the way the single giant delete just did.
+    const DELETE_CHUNK = 50;
+    let deleted = 0;
     for (let i = 0; i < matchingIds.length; i += DELETE_CHUNK) {
       const chunk = matchingIds.slice(i, i + DELETE_CHUNK);
       const { error } = await supabase.from('contacts').delete().in('id', chunk);
-      if (error) throw error;
+      if (error) {
+        // Surface partial progress rather than a bare failure — a
+        // batch failing partway through still deleted everything
+        // before it, and the user needs to know that count, not just
+        // "it didn't work."
+        throw new Error(
+          `Deleted ${deleted} of ${matchingIds.length} before a batch failed: ${error.message}`,
+        );
+      }
+      deleted += chunk.length;
     }
-    return matchingIds.length;
+    return deleted;
   }
 
   async function handleBulkDelete() {
@@ -368,8 +395,15 @@ export default function ContactsPage() {
       setSelectAllMatching(false);
       setPage(0);
       fetchContacts();
-    } catch {
-      toast.error('Failed to delete contacts');
+    } catch (err) {
+      // Re-fetch even on failure — a batched delete can partially
+      // succeed, and the list should reflect what's actually left
+      // rather than showing stale rows the user thinks still failed.
+      setSelected(new Set());
+      setSelectAllMatching(false);
+      setPage(0);
+      fetchContacts();
+      toast.error(err instanceof Error ? err.message : 'Failed to delete contacts');
     }
 
     setDeleting(false);
