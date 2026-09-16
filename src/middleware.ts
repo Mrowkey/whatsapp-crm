@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { AUTH_DISABLED } from '@/lib/auth/mode'
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   if (AUTH_DISABLED) {
     if (
       request.nextUrl.pathname === '/login' ||
