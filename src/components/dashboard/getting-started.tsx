@@ -57,6 +57,21 @@ const STEPS: Step[] = [
 ]
 
 /**
+ * Reads the per-browser dismiss flag at first render. Server render and
+ * the hydration pass both paint nothing (status is still null at that
+ * point), so reading localStorage lazily here is hydration-safe.
+ */
+function readDismissed(): boolean {
+  if (typeof window === 'undefined') return true
+  try {
+    if (localStorage.getItem(DISMISS_KEY) === 'true') return true
+  } catch {
+    // ignore storage errors, fall through to showing the checklist
+  }
+  return false
+}
+
+/**
  * First-run checklist for non-technical users: turns an empty, jargon-y
  * dashboard into a guided "what do I do next" list. Auto-hides once every
  * step is complete, and can be dismissed early (per-browser) if a team
@@ -65,21 +80,16 @@ const STEPS: Step[] = [
 export function GettingStarted() {
   const { accountId } = useAuth()
   const [status, setStatus] = useState<OnboardingStatus | null>(null)
-  const [dismissed, setDismissed] = useState(true) // default hidden until we know it's needed
+  const [dismissed, setDismissed] = useState(readDismissed)
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem(DISMISS_KEY) === 'true') return
-    } catch {
-      // ignore storage errors, fall through to showing the checklist
-    }
-    setDismissed(false)
+    if (dismissed) return
 
     const supabase = createClient()
     loadOnboardingStatus(supabase, accountId)
       .then(setStatus)
       .catch((err) => console.error('[dashboard] onboarding status failed:', err))
-  }, [accountId])
+  }, [accountId, dismissed])
 
   if (dismissed || !status) return null
 

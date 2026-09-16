@@ -231,7 +231,7 @@ export function Step2SelectAudience({
         }
       } else {
         // "All" — fetch the opted-in total, then subtract exclude set if any.
-        let q = supabase
+        const q = supabase
           .from('contacts')
           .select('*', { count: 'exact', head: true })
           .eq('opted_in', true);
