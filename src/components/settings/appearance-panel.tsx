@@ -3,7 +3,13 @@
 import { Check, Moon, Palette, SunMoon, Sun } from "lucide-react";
 
 import { useTheme } from "@/hooks/use-theme";
-import { MODES, THEMES, type Mode, type ThemeId } from "@/lib/themes";
+import {
+  ACCENT_PICKER_ENABLED,
+  MODES,
+  THEMES,
+  type Mode,
+  type ThemeId,
+} from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { SettingsPanelHead } from "./settings-panel-head";
 
@@ -50,26 +56,28 @@ export function AppearancePanel() {
         </div>
       </div>
 
-      <div className="mt-8 space-y-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Palette className="size-4 text-muted-foreground" />
-          Accent color
-        </h3>
+      {ACCENT_PICKER_ENABLED && (
+        <div className="mt-8 space-y-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Palette className="size-4 text-muted-foreground" />
+            Accent color
+          </h3>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {THEMES.map((t) => (
-            <ThemeCard
-              key={t.id}
-              id={t.id}
-              name={t.name}
-              tagline={t.tagline}
-              swatch={t.swatch}
-              isActive={t.id === theme}
-              onPick={() => setTheme(t.id)}
-            />
-          ))}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {THEMES.map((t) => (
+              <ThemeCard
+                key={t.id}
+                id={t.id}
+                name={t.name}
+                tagline={t.tagline}
+                swatch={t.swatch}
+                isActive={t.id === theme}
+                onPick={() => setTheme(t.id)}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

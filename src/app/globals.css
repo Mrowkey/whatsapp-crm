@@ -88,64 +88,94 @@
 
 :root,
 html[data-mode="dark"] {
-  --background: oklch(0.13 0.01 260);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.18 0.01 260);
-  --card-2: oklch(0.205 0.01 260);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.18 0.01 260);
-  --popover-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.22 0.01 260);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.22 0.01 260);
-  --muted-foreground: oklch(0.65 0.01 260);
-  --accent: oklch(0.22 0.01 260);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: #0F1115;
+  --foreground: #F3F4F6;
+  --card: #171A20;
+  --card-2: #1D222B;
+  --card-foreground: #F3F4F6;
+  --popover: #171A20;
+  --popover-foreground: #F3F4F6;
+  --secondary: #1D222B;
+  --secondary-foreground: #F3F4F6;
+  --muted: #1D222B;
+  --muted-foreground: #8B92A0;
+  --accent: #1D222B;
+  --accent-foreground: #F3F4F6;
+  --accent-live: #E8622C;
+  --accent-success: #1B8A5A;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.28 0.01 260);
-  --input: oklch(0.28 0.01 260);
+  --border: #262A33;
+  --input: #262A33;
+  --chart-1: #2E5EAA;
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.16 0.01 260);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.22 0.01 260);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.28 0.01 260);
+  --primary: #2E5EAA;
+  --primary-foreground: #F3F4F6;
+  --primary-hover: #3B6CC0;
+  --primary-soft: rgb(46 94 170 / 0.12);
+  --primary-soft-2: rgb(46 94 170 / 0.2);
+  --ring: #2E5EAA;
+  --sidebar: #171A20;
+  --sidebar-foreground: #F3F4F6;
+  --sidebar-accent: #1D222B;
+  --sidebar-accent-foreground: #F3F4F6;
+  --sidebar-border: #262A33;
+  --sidebar-primary: #2E5EAA;
+  --sidebar-primary-foreground: #F3F4F6;
+  --sidebar-ring: #2E5EAA;
 }
 
 html[data-mode="light"] {
-  --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.21 0.01 260);
-  --card: oklch(1 0 0);
-  --card-2: oklch(0.985 0.002 260);
-  --card-foreground: oklch(0.21 0.01 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.01 260);
-  --secondary: oklch(0.967 0.003 260);
-  --secondary-foreground: oklch(0.25 0.01 260);
-  --muted: oklch(0.967 0.003 260);
-  --muted-foreground: oklch(0.52 0.015 260);
-  --accent: oklch(0.96 0.004 260);
-  --accent-foreground: oklch(0.25 0.01 260);
+  --background: #F7F6F3;
+  --foreground: #14171C;
+  --card: #FBFAF8;
+  --card-2: #ECE9E3;
+  --card-foreground: #14171C;
+  --popover: #FBFAF8;
+  --popover-foreground: #14171C;
+  --secondary: #ECE9E3;
+  --secondary-foreground: #14171C;
+  --muted: #ECE9E3;
+  --muted-foreground: #5B6270;
+  --accent: #ECE9E3;
+  --accent-foreground: #14171C;
+  --accent-live: #D9531F;
+  --accent-success: #167A4E;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.004 260);
-  --input: oklch(0.922 0.004 260);
+  --border: #E4E1DB;
+  --input: #E4E1DB;
+  --chart-1: #24508F;
   --chart-2: oklch(0.6 0.1 260);
   --chart-3: oklch(0.7 0.06 260);
   --chart-4: oklch(0.8 0.04 260);
   --chart-5: oklch(0.87 0.03 260);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0.002 260);
-  --sidebar-foreground: oklch(0.21 0.01 260);
-  --sidebar-accent: oklch(0.96 0.004 260);
-  --sidebar-accent-foreground: oklch(0.25 0.01 260);
-  --sidebar-border: oklch(0.922 0.004 260);
+  --primary: #24508F;
+  --primary-foreground: #F3F4F6;
+  --primary-hover: #2F5FA8;
+  --primary-soft: rgb(36 80 143 / 0.12);
+  --primary-soft-2: rgb(36 80 143 / 0.2);
+  --ring: #24508F;
+  --sidebar: #FBFAF8;
+  --sidebar-foreground: #14171C;
+  --sidebar-accent: #ECE9E3;
+  --sidebar-accent-foreground: #14171C;
+  --sidebar-border: #E4E1DB;
+  --sidebar-primary: #24508F;
+  --sidebar-primary-foreground: #F3F4F6;
+  --sidebar-ring: #24508F;
 }
 
-/* ---- ACCENT: primary color ---- */
+/* ---- ACCENT: primary color ----
+ * Disabled while the fixed brand palette is the single identity.
+ * The mode blocks above now own --primary* / --ring / --sidebar-* /
+ * --chart-1; these per-accent overrides out-specify the mode blocks,
+ * so they must stay commented out for the brand blue to render.
+ * To re-enable accent switching, uncomment and strip the --primary*
+ * etc. declarations from the mode blocks.
 
 :root,
 html[data-theme="violet"] {
@@ -216,6 +246,7 @@ html[data-theme="rose"] {
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-ring: oklch(0.645 0.22 16);
 }
+*/
 
 @layer base {
   * {

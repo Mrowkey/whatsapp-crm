@@ -28,6 +28,14 @@ export const DEFAULT_THEME: ThemeId = "cobalt";
 export const STORAGE_KEY = "wacrm.theme";
 
 /**
+ * Feature flag: accent-color picker. While the fixed brand palette is
+ * the single visual identity, the per-accent `html[data-theme]` blocks
+ * in globals.css are commented out, so switching `data-theme` has no
+ * visual effect — the picker is hidden until that's reversed.
+ */
+export const ACCENT_PICKER_ENABLED = false;
+
+/**
  * MODE — the light/dark dimension, orthogonal to the accent theme.
  *
  * The CSS variables live in `src/app/globals.css` under
