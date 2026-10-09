@@ -48,6 +48,28 @@ export interface ResponseTimeSummary {
   lastWeekAvg: number | null
 }
 
+/** Current conversation counts by handling state. */
+export interface InboxSummary {
+  open: number
+  pending: number
+  closed: number
+  /** Not closed and not assigned to anyone. */
+  unassigned: number
+  /** Conversations with at least one unread customer message. */
+  unread: number
+}
+
+export interface CampaignSnapshot {
+  id: string
+  name: string
+  status: string
+  total_recipients: number
+  sent_count: number
+  delivered_count: number
+  read_count: number
+  created_at: string
+}
+
 export type ActivityKind =
   | 'message'
   | 'deal'

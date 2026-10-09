@@ -7,9 +7,12 @@ import {
   mondayIndex,
   startOfLocalDay,
 } from './date-utils'
+import { fetchAllRows } from '@/lib/analytics/queries'
 import type {
   ActivityItem,
+  CampaignSnapshot,
   ConversationsSeriesPoint,
+  InboxSummary,
   MetricsBundle,
   PipelineDonutData,
   PipelineStageSlice,
@@ -106,18 +109,24 @@ export async function loadConversationsSeries(
   rangeDays: number,
 ): Promise<ConversationsSeriesPoint[]> {
   const start = daysAgoStart(rangeDays - 1).toISOString()
-  const { data, error } = await db
-    .from('messages')
-    .select('created_at, sender_type')
-    .gte('created_at', start)
-    .order('created_at', { ascending: true })
-  if (error) throw error
+  // Paged: a single PostgREST response stops at 1,000 rows, which a
+  // busy account exceeds within the range and would undercount.
+  const { rows: data } = await fetchAllRows<{ created_at: string; sender_type: string }>(
+    (from, to) =>
+      db
+        .from('messages')
+        .select('created_at, sender_type')
+        .gte('created_at', start)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+  )
 
   const keys = lastNDayKeys(rangeDays)
   const buckets = new Map<string, { incoming: number; outgoing: number }>()
   for (const k of keys) buckets.set(k, { incoming: 0, outgoing: 0 })
 
-  for (const row of (data ?? []) as { created_at: string; sender_type: string }[]) {
+  for (const row of data) {
     const key = localDayKey(row.created_at)
     const bucket = buckets.get(key)
     if (!bucket) continue
@@ -176,19 +185,20 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
   // with enough overlap if the user opens the dashboard late on a
   // Monday.
   const fourteenDaysAgo = daysAgoStart(13).toISOString()
-  const { data, error } = await db
-    .from('messages')
-    .select('conversation_id, sender_type, created_at')
-    .gte('created_at', fourteenDaysAgo)
-    .order('conversation_id', { ascending: true })
-    .order('created_at', { ascending: true })
-  if (error) throw error
-
-  const rows = (data ?? []) as {
+  const { rows } = await fetchAllRows<{
     conversation_id: string
     sender_type: string
     created_at: string
-  }[]
+  }>((from, to) =>
+    db
+      .from('messages')
+      .select('conversation_id, sender_type, created_at')
+      .gte('created_at', fourteenDaysAgo)
+      .order('conversation_id', { ascending: true })
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 
   // Group per conversation, pair unreplied customer messages with the
   // next outbound message from the agent/bot. A single customer message
@@ -263,7 +273,41 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
   }
 }
 
-// --- 5. Activity feed --------------------------------------------------
+// --- 5. Inbox + campaign summaries -------------------------------------
+
+export async function loadInboxSummary(db: DB): Promise<InboxSummary> {
+  const count = () => db.from('conversations').select('id', { count: 'exact', head: true })
+  const [open, pending, closed, unassigned, unread] = await Promise.all([
+    count().eq('status', 'open'),
+    count().eq('status', 'pending'),
+    count().eq('status', 'closed'),
+    // Unassigned only matters while a conversation still needs handling.
+    count().is('assigned_agent_id', null).neq('status', 'closed'),
+    count().gt('unread_count', 0),
+  ])
+  for (const res of [open, pending, closed, unassigned, unread]) {
+    if (res.error) throw res.error
+  }
+  return {
+    open: open.count ?? 0,
+    pending: pending.count ?? 0,
+    closed: closed.count ?? 0,
+    unassigned: unassigned.count ?? 0,
+    unread: unread.count ?? 0,
+  }
+}
+
+export async function loadRecentCampaigns(db: DB, limit = 5): Promise<CampaignSnapshot[]> {
+  const { data, error } = await db
+    .from('broadcasts')
+    .select('id, name, status, total_recipients, sent_count, delivered_count, read_count, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []) as CampaignSnapshot[]
+}
+
+// --- 6. Activity feed --------------------------------------------------
 
 export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> {
   // Pull ~10 from each source (plenty of headroom after merge-sort),

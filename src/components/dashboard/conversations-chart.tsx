@@ -15,6 +15,9 @@ interface ConversationsChartProps {
   loading: boolean
   range: RangeDays
   onRangeChange: (r: RangeDays) => void
+  /** Hide the built-in 7/30/90 tabs when the page owns the range. */
+  hideRangeTabs?: boolean
+  title?: string
 }
 
 // ------------------------------------------------------------
@@ -27,7 +30,14 @@ const VB_W = 760
 const VB_H = 240
 const PADDING = { top: 16, right: 16, bottom: 28, left: 40 }
 
-export function ConversationsChart({ series, loading, range, onRangeChange }: ConversationsChartProps) {
+export function ConversationsChart({
+  series,
+  loading,
+  range,
+  onRangeChange,
+  hideRangeTabs = false,
+  title = 'Message volume',
+}: ConversationsChartProps) {
   const data = series[range]
 
   // Memoise the max so per-day hover math doesn't recompute it.
@@ -49,10 +59,10 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
     <section className="flex h-full flex-col rounded-xl border border-border bg-card">
       <header className="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Conversations Over Time</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Daily message volume by direction</p>
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Messages per day, by direction</p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1">
+        <div className={cn('flex items-center gap-1 rounded-lg bg-muted/60 p-1', hideRangeTabs && 'hidden')}>
           {[7, 30, 90].map((r) => (
             <button
               key={r}
@@ -61,7 +71,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
               className={cn(
                 'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
                 range === r
-                  ? 'bg-secondary text-secondary-foreground'
+                  ? 'bg-card text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
@@ -86,8 +96,8 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
       </div>
 
       <footer className="flex items-center gap-4 border-t border-border px-5 py-3 text-xs text-muted-foreground">
-        <LegendDot color="#3b82f6" label="Incoming" />
-        <LegendDot color="#7c3aed" label="Outgoing" />
+        <LegendDot color="var(--chart-2)" label="Incoming" />
+        <LegendDot color="var(--chart-1)" label="Outgoing" />
       </footer>
     </section>
   )
@@ -242,7 +252,7 @@ function LineSvg({
         <path
           d={outgoingPath}
           fill="none"
-          stroke="#7c3aed"
+          stroke="var(--chart-1)"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -251,7 +261,7 @@ function LineSvg({
         <path
           d={incomingPath}
           fill="none"
-          stroke="#3b82f6"
+          stroke="var(--chart-2)"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -268,8 +278,8 @@ function LineSvg({
               stroke="var(--muted-foreground)"
               strokeDasharray="3 3"
             />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#3b82f6" />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#7c3aed" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="var(--chart-2)" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="var(--chart-1)" />
           </g>
         )}
       </svg>

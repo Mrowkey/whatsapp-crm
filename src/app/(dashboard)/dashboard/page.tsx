@@ -4,36 +4,38 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
-import {
-  MessageSquare,
-  UserPlus,
-  DollarSign,
-  Send,
-} from 'lucide-react'
 
 import {
   loadActivity,
   loadConversationsSeries,
+  loadInboxSummary,
   loadMetrics,
   loadPipelineDonut,
+  loadRecentCampaigns,
   loadResponseTime,
 } from '@/lib/dashboard/queries'
 import type {
   ActivityItem,
+  CampaignSnapshot,
   ConversationsSeriesPoint,
+  InboxSummary,
   MetricsBundle,
   PipelineDonutData,
   ResponseTimeSummary,
 } from '@/lib/dashboard/types'
 
-import { MetricCard } from '@/components/dashboard/metric-card'
-import { SkeletonCard } from '@/components/dashboard/skeleton'
+import { PageHeader } from '@/components/layout/page-header'
+import { StatStrip, type StatItem } from '@/components/ui/stat'
 import { QuickActions } from '@/components/dashboard/quick-actions'
 import { GettingStarted } from '@/components/dashboard/getting-started'
 import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import {
+  InboxSummaryCard,
+  RecentCampaignsCard,
+} from '@/components/dashboard/summary-cards'
 
 type RangeDays = 7 | 30 | 90
 
@@ -62,6 +64,12 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
 
+  const [inbox, setInbox] = useState<InboxSummary | null>(null)
+  const [inboxLoading, setInboxLoading] = useState(true)
+
+  const [campaigns, setCampaigns] = useState<CampaignSnapshot[] | null>(null)
+  const [campaignsLoading, setCampaignsLoading] = useState(true)
+
   const loadAll = useCallback(() => {
     const db = createClient()
 
@@ -72,6 +80,16 @@ export default function DashboardPage() {
       .then((m) => setMetrics(m))
       .catch((err) => console.error('[dashboard] metrics failed:', err))
       .finally(() => setMetricsLoading(false))
+
+    void loadInboxSummary(db)
+      .then((s) => setInbox(s))
+      .catch((err) => console.error('[dashboard] inbox summary failed:', err))
+      .finally(() => setInboxLoading(false))
+
+    void loadRecentCampaigns(db)
+      .then((c) => setCampaigns(c))
+      .catch((err) => console.error('[dashboard] campaigns failed:', err))
+      .finally(() => setCampaignsLoading(false))
 
     void loadConversationsSeries(db, 30)
       .then((s) => setSeries((prev) => ({ ...prev, 30: s })))
@@ -119,82 +137,66 @@ export default function DashboardPage() {
     [series],
   )
 
+  const stats: StatItem[] = metrics
+    ? [
+        {
+          label: 'Open conversations',
+          value: metrics.activeConversations.current.toLocaleString(),
+          ...deltaHint(metrics.activeConversations.previous, 'new today vs yesterday'),
+        },
+        {
+          label: 'New contacts today',
+          value: metrics.newContactsToday.current.toLocaleString(),
+          ...deltaHint(
+            metrics.newContactsToday.current - metrics.newContactsToday.previous,
+            'vs yesterday',
+          ),
+        },
+        {
+          label: 'Messages sent today',
+          value: metrics.messagesSentToday.current.toLocaleString(),
+          ...deltaHint(
+            metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
+            'vs yesterday',
+          ),
+        },
+        {
+          label: 'Open deals value',
+          value: formatCurrency(metrics.openDealsValue, defaultCurrency),
+          hint: `${metrics.openDealsCount} open deal${metrics.openDealsCount === 1 ? '' : 's'}`,
+        },
+      ]
+    : [
+        { label: 'Open conversations', value: '' },
+        { label: 'New contacts today', value: '' },
+        { label: 'Messages sent today', value: '' },
+        { label: 'Open deals value', value: '' },
+      ]
+
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Live analytics across conversations, contacts, deals, broadcasts, and automations.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Today's conversations, campaigns and pipeline at a glance."
+        actions={<QuickActions />}
+      />
 
       {/* Getting started checklist — self-hides once every step is done */}
       <GettingStarted />
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metricsLoading || !metrics ? (
-          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
-        ) : (
-          <>
-            <MetricCard
-              title="Active Conversations"
-              value={metrics.activeConversations.current.toLocaleString()}
-              icon={MessageSquare}
-              delta={{
-                sign: metrics.activeConversations.previous,
-                label: deltaLabel(metrics.activeConversations.previous, 'new today vs yesterday'),
-              }}
-            />
-            <MetricCard
-              title="New Contacts Today"
-              value={metrics.newContactsToday.current.toLocaleString()}
-              icon={UserPlus}
-              delta={{
-                sign:
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                label: deltaLabel(
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                  'vs yesterday',
-                ),
-              }}
-            />
-            <MetricCard
-              title="Open Deals Value"
-              value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
-              icon={DollarSign}
-              subtitle={`${metrics.openDealsCount} open deal${metrics.openDealsCount === 1 ? '' : 's'}`}
-            />
-            <MetricCard
-              title="Messages Sent Today"
-              value={metrics.messagesSentToday.current.toLocaleString()}
-              icon={Send}
-              delta={{
-                sign:
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                label: deltaLabel(
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                  'vs yesterday',
-                ),
-              }}
-            />
-          </>
-        )}
+      <StatStrip items={stats} loading={metricsLoading || !metrics} />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <InboxSummaryCard data={inbox} loading={inboxLoading} />
+        <RecentCampaignsCard data={campaigns} loading={campaignsLoading} />
       </div>
 
-      {/* Quick actions */}
-      <QuickActions />
-
-      {/* Charts row */}
       {/* items-stretch (the grid default) stretches the two columns to
-          match the tallest sibling; adding h-full on each wrapper and
-          on the inner panels makes both cards actually fill that
-          stretched height so their rounded borders line up. Without
-          this, the pipeline card rendered at its natural (shorter)
-          height while the line chart drove the row height. */}
+          match the tallest sibling; h-full on each wrapper and on the
+          inner panels makes both cards fill that stretched height so
+          their borders line up. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="h-full lg:col-span-3">
+        <div className="h-full min-w-0 lg:col-span-3">
           <ConversationsChart
             series={series}
             loading={seriesLoading}
@@ -202,7 +204,7 @@ export default function DashboardPage() {
             onRangeChange={handleRangeChange}
           />
         </div>
-        <div className="h-full lg:col-span-2">
+        <div className="h-full min-w-0 lg:col-span-2">
           <PipelineDonut
             data={pipeline}
             loading={pipelineLoading}
@@ -211,10 +213,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Response time */}
       <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
 
-      {/* Activity feed */}
       <ActivityFeed items={activity} loading={activityLoading} />
     </div>
   )
@@ -222,8 +222,11 @@ export default function DashboardPage() {
 
 // ------------------------------------------------------------
 
-function deltaLabel(delta: number, suffix: string): string {
-  if (delta === 0) return `No change ${suffix}`
+function deltaHint(delta: number, suffix: string): Pick<StatItem, 'hint' | 'tone'> {
+  if (delta === 0) return { hint: `No change ${suffix}` }
   const sign = delta > 0 ? '+' : ''
-  return `${sign}${delta.toLocaleString()} ${suffix}`
+  return {
+    hint: `${sign}${delta.toLocaleString()} ${suffix}`,
+    tone: delta > 0 ? 'positive' : 'negative',
+  }
 }

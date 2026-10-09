@@ -156,6 +156,39 @@ const CONTACT_TAGS = CONTACTS.flatMap((c) =>
   })),
 )
 
+const broadcast = (
+  id: string,
+  name: string,
+  status: string,
+  counts: [total: number, sent: number, delivered: number, read: number, replied: number, failed: number],
+  ago: number,
+  extra: Record<string, unknown> = {},
+) => ({
+  id,
+  user_id: DEMO_USER_ID,
+  account_id: DEMO_ACCOUNT_ID,
+  name,
+  template_name: 'sample_template',
+  template_language: 'en',
+  status,
+  total_recipients: counts[0],
+  sent_count: counts[1],
+  delivered_count: counts[2],
+  read_count: counts[3],
+  replied_count: counts[4],
+  failed_count: counts[5],
+  created_at: minutesAgo(ago),
+  ...extra,
+})
+
+const BROADCASTS = [
+  broadcast('bc-1', 'Sample launch announcement', 'sent', [1200, 1164, 1101, 702, 96, 36], 60 * 24 * 2),
+  broadcast('bc-2', 'Sample weekend offer', 'scheduled', [480, 0, 0, 0, 0, 0], 60 * 5, {
+    scheduled_at: new Date(Date.now() + 36 * 3_600_000).toISOString(),
+  }),
+  broadcast('bc-3', 'Sample re-engagement', 'draft', [0, 0, 0, 0, 0, 0], 60 * 24 * 6),
+]
+
 /** Table name → sample rows. Tables not listed read as empty. */
 export const MOCK_FIXTURES: Record<string, Array<Record<string, unknown>>> = {
   tags: TAGS,
@@ -165,4 +198,5 @@ export const MOCK_FIXTURES: Record<string, Array<Record<string, unknown>>> = {
   deals: DEALS,
   contact_notes: NOTES,
   contact_tags: CONTACT_TAGS,
+  broadcasts: BROADCASTS,
 }

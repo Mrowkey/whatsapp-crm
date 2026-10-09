@@ -80,6 +80,9 @@ export async function middleware(request: NextRequest) {
     '/pipelines',
     '/broadcasts',
     '/automations',
+    '/flows',
+    '/analytics',
+    '/notifications',
     '/settings',
   ]
   if (!user && protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))) {

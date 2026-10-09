@@ -26,43 +26,43 @@ export interface StatusDisplay {
 export const broadcastStatusConfig: Record<BroadcastStatus, StatusDisplay> = {
   draft: {
     label: "Draft",
-    classes: "bg-slate-500/10 text-muted-foreground border-slate-500/20",
+    classes: "bg-muted text-muted-foreground border-transparent",
   },
   scheduled: {
     label: "Scheduled",
-    classes: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    classes: "bg-info-soft text-info border-transparent",
   },
   sending: {
     label: "Sending",
-    classes: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    classes: "bg-warning-soft text-warning border-transparent",
     pulse: true,
   },
   sent: {
     label: "Sent",
-    classes: "bg-primary/10 text-primary border-primary/20",
+    classes: "bg-success-soft text-success border-transparent",
   },
   failed: {
     label: "Failed",
-    classes: "bg-red-500/10 text-red-400 border-red-500/20",
+    classes: "bg-destructive/10 text-destructive border-transparent",
   },
 };
 
 export const recipientStatusConfig: Record<RecipientStatus, StatusDisplay> = {
   pending: {
     label: "Pending",
-    classes: "bg-slate-500/10 text-muted-foreground border-slate-500/20",
+    classes: "bg-muted text-muted-foreground border-transparent",
   },
   sent: {
     label: "Sent",
-    classes: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    classes: "bg-info-soft text-info border-transparent",
   },
   delivered: {
     label: "Delivered",
-    classes: "bg-primary/10 text-primary border-primary/20",
+    classes: "bg-success-soft text-success border-transparent",
   },
   read: {
     label: "Read",
-    classes: "bg-primary/10 text-primary border-primary/20",
+    classes: "bg-success-soft text-success border-transparent",
   },
   replied: {
     label: "Replied",
@@ -70,7 +70,7 @@ export const recipientStatusConfig: Record<RecipientStatus, StatusDisplay> = {
   },
   failed: {
     label: "Failed",
-    classes: "bg-red-500/10 text-red-400 border-red-500/20",
+    classes: "bg-destructive/10 text-destructive border-transparent",
   },
 };
 

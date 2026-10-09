@@ -31,11 +31,11 @@ interface KindTheme {
 }
 
 const KIND_THEME: Record<ActivityKind, KindTheme> = {
-  message: { icon: MessageSquare, badge: 'bg-blue-500/10 text-blue-400' },
-  contact: { icon: UserPlus, badge: 'bg-primary/10 text-primary' },
-  deal: { icon: Briefcase, badge: 'bg-primary/10 text-primary' },
-  broadcast: { icon: Radio, badge: 'bg-amber-500/10 text-amber-400' },
-  automation: { icon: Zap, badge: 'bg-rose-500/10 text-rose-400' },
+  message: { icon: MessageSquare, badge: 'bg-info-soft text-info' },
+  contact: { icon: UserPlus, badge: 'bg-success-soft text-success' },
+  deal: { icon: Briefcase, badge: 'bg-muted text-foreground' },
+  broadcast: { icon: Radio, badge: 'bg-warning-soft text-warning' },
+  automation: { icon: Zap, badge: 'bg-muted text-foreground' },
 }
 
 export function ActivityFeed({ items, loading }: ActivityFeedProps) {
@@ -56,7 +56,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
   return (
     <section className="rounded-xl border border-border bg-card">
       <header className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-sm font-semibold text-foreground">Recent Activity</h2>
+        <h2 className="text-sm font-semibold text-foreground">Recent activity</h2>
         <Link
           href="/inbox"
           className="text-xs font-medium text-primary hover:text-primary/80"

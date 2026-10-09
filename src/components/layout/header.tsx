@@ -81,9 +81,12 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         >
           <Menu className="size-5" />
         </button>
-        <h1 className="truncate text-[15px] font-semibold text-foreground">
+        {/* Not a heading: each page renders its own <h1>. This is the
+            "where am I" label for the shell (and the only title on
+            full-bleed pages like the inbox). */}
+        <p className="truncate text-sm font-semibold text-foreground">
           {title}
-        </h1>
+        </p>
       </div>
 
       <div className="flex items-center gap-1">
