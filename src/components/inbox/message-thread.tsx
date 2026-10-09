@@ -23,13 +23,15 @@ import {
   Check,
   Clock,
   ArrowLeft,
+  AlertCircle,
+  CheckCircle2,
+  RotateCcw,
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
   Bot,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -40,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./message-bubble";
+import { ContactAvatar } from "./contact-avatar";
 import { MessageActions } from "./message-actions";
 import {
   MessageComposer,
@@ -135,9 +138,9 @@ function groupMessagesByDate(messages: Message[]) {
 }
 
 const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string }[] = [
-  { label: "Open", value: "open", color: "text-primary" },
-  { label: "Pending", value: "pending", color: "text-amber-400" },
-  { label: "Closed", value: "closed", color: "text-muted-foreground" },
+  { label: "Open", value: "open", color: "bg-success-soft text-success" },
+  { label: "Pending", value: "pending", color: "bg-warning-soft text-warning" },
+  { label: "Closed", value: "closed", color: "bg-muted text-muted-foreground" },
 ];
 
 /**
@@ -150,7 +153,7 @@ const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string 
  * if we ever switch the asset, both spots update together.
  */
 const DOODLE_BG_CLASSES =
-  "bg-background bg-[url('/inbox-doodle.svg')] bg-repeat";
+  "bg-chat-bg bg-[url('/inbox-doodle.svg')] bg-repeat";
 
 export function MessageThread({
   conversation,
@@ -170,6 +173,7 @@ export function MessageThread({
   const { user } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -286,7 +290,9 @@ export function MessageThread({
 
       if (error) {
         console.error("Failed to fetch messages:", error);
+        setLoadError(error.message || "Could not load messages");
       } else {
+        setLoadError(null);
         onMessagesLoadedRef.current(data ?? []);
       }
 
@@ -568,10 +574,16 @@ export function MessageThread({
       if (!conversation) return;
 
       const supabase = createClient();
-      await supabase
+      const { error } = await supabase
         .from("conversations")
         .update({ status })
         .eq("id", conversation.id);
+
+      if (error) {
+        console.error("Failed to update status:", error);
+        toast.error("Failed to update conversation status");
+        return;
+      }
 
       onStatusChange(conversation.id, status);
     },
@@ -780,15 +792,17 @@ export function MessageThread({
   if (!conversation || !contact) {
     return (
       <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <MessageSquare className="h-8 w-8 text-muted-foreground" />
+        <div className="flex max-w-xs flex-col items-center rounded-xl border border-border bg-card px-8 py-7 text-center shadow-xs">
+          <div className="flex size-11 items-center justify-center rounded-full bg-primary-soft">
+            <MessageSquare className="size-5 text-primary" />
+          </div>
+          <h3 className="mt-3 text-sm font-semibold text-foreground">
+            No conversation selected
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Pick a conversation from the list to read and reply.
+          </p>
         </div>
-        <h3 className="mt-4 text-sm font-medium text-muted-foreground">
-          Select a conversation
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Choose a conversation from the left to start messaging
-        </p>
       </div>
     );
   }
@@ -816,7 +830,7 @@ export function MessageThread({
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
@@ -830,28 +844,34 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-            {displayName.charAt(0).toUpperCase()}
-          </div>
+          <ContactAvatar name={displayName} avatarUrl={contact.avatar_url} />
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-            <p className="truncate text-xs text-muted-foreground">{contact.phone}</p>
+            {/* Phone, then the WhatsApp 24-hour reply-window state. It
+                lives in the subtitle (not a separate badge) so the name
+                keeps its room when the customer panel is docked. */}
+            <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+              <span className="hidden truncate tabular-nums sm:inline">
+                {contact.phone}
+              </span>
+              {sessionInfo.remaining && (
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 font-medium",
+                    sessionInfo.expired ? "text-warning" : "text-success",
+                  )}
+                >
+                  <Clock className="size-3" />
+                  {sessionInfo.expired
+                    ? "Reply window closed"
+                    : sessionInfo.remaining}
+                </span>
+              )}
+            </p>
           </div>
-          {/* Session timer badge — hidden on the narrowest phones so
-              the name + back arrow keep their room. */}
-          <Badge
-            variant="outline"
-            className={cn(
-              "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
-              sessionInfo.expired ? "text-red-400" : "text-primary"
-            )}
-          >
-            <Clock className="h-3 w-3" />
-            {sessionInfo.remaining}
-          </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           {/* Contact-panel toggle — desktop only. The contact sidebar
               eats a chunk of horizontal width that crowds the thread on
               smaller laptops; this lets agents reclaim it when they just
@@ -867,8 +887,10 @@ export function MessageThread({
               aria-pressed={contactPanelOpen}
               title={contactPanelOpen ? "Hide contact" : "Show contact"}
               className={cn(
-                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
-                contactPanelOpen ? "text-primary" : "text-muted-foreground",
+                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground",
+                contactPanelOpen
+                  ? "text-muted-foreground xl:text-primary"
+                  : "text-muted-foreground",
               )}
             >
               {contactPanelOpen ? (
@@ -892,7 +914,7 @@ export function MessageThread({
               aria-label="Refresh conversation"
               title="Refresh"
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
+                "hidden h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60 sm:inline-flex",
               )}
             >
               <RefreshCw
@@ -901,26 +923,49 @@ export function MessageThread({
             </button>
           )}
 
+          {/* One-click resolve / reopen — the most common status change. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:inline-flex"
+            title={
+              conversation.status === "closed"
+                ? "Reopen conversation"
+                : "Mark conversation as resolved"
+            }
+            onClick={() =>
+              handleStatusChange(
+                conversation.status === "closed" ? "open" : "closed",
+              )
+            }
+          >
+            {conversation.status === "closed" ? <RotateCcw /> : <CheckCircle2 />}
+            {/* Label drops out on tighter widths; the title + sr-only
+                text keep the action named. */}
+            <span className="sr-only 2xl:not-sr-only">
+              {conversation.status === "closed" ? "Reopen" : "Resolve"}
+            </span>
+          </Button>
+
           {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
-                  currentStatus?.color ?? "text-muted-foreground"
+                  "inline-flex h-7 items-center justify-center gap-1 rounded-full px-2.5 text-xs font-medium hover:brightness-95",
+                  currentStatus?.color ?? "bg-muted text-muted-foreground"
                 )}>
                 {currentStatus?.label ?? "Status"}
                 <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border-border bg-popover"
-            >
+            <DropdownMenuContent align="end" className="w-36">
               {STATUS_OPTIONS.map((opt) => (
                 <DropdownMenuItem
                   key={opt.value}
                   onClick={() => handleStatusChange(opt.value)}
-                  className={cn("text-sm", opt.color)}
                 >
-                  {opt.label}
+                  <span className="flex-1">{opt.label}</span>
+                  {opt.value === conversation.status && (
+                    <Check className="size-3.5 text-primary" />
+                  )}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -930,18 +975,17 @@ export function MessageThread({
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
-                assignedAgentId ? "text-primary" : "text-muted-foreground"
+                "inline-flex h-7 items-center justify-center gap-1 rounded-md border border-input bg-card px-2 text-xs font-medium shadow-xs hover:bg-muted",
+                assignedAgentId ? "text-foreground" : "text-muted-foreground"
               )}
             >
               <UserPlus className="h-3 w-3" />
-              <span className="hidden sm:inline">{assignLabel}</span>
+              <span className="hidden max-w-24 truncate sm:inline">
+                {assignLabel}
+              </span>
               <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border-border bg-popover"
-            >
+            <DropdownMenuContent align="end" className="w-56">
               {profiles.length === 0 ? (
                 <DropdownMenuItem disabled className="text-sm text-muted-foreground">
                   No teammates available
@@ -1000,7 +1044,7 @@ export function MessageThread({
           dropdown above, which is what actually stops the AI (assigning
           an agent is one of dispatchInboundToAiReply's eligibility gates). */}
       {conversation.ai_handoff_reason && !assignedAgentId && (
-        <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 sm:px-4">
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-warning-soft px-3 py-2 sm:px-4">
           <div className="flex min-w-0 items-center gap-2">
             <Bot className="h-4 w-4 flex-shrink-0 text-amber-500" />
             <p className="truncate text-xs text-amber-600 dark:text-amber-400">
@@ -1021,17 +1065,59 @@ export function MessageThread({
       )}
 
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div
+        ref={scrollRef}
+        className="scroll-thin flex-1 overflow-y-auto px-3 py-4 sm:px-6"
+      >
+        {loading && messages.length === 0 ? (
+          <div
+            className="space-y-3"
+            aria-busy="true"
+            aria-label="Loading messages"
+          >
+            {["w-52", "ml-auto w-64", "w-40", "ml-auto w-48"].map((w, i) => (
+              <div
+                key={i}
+                className={cn("h-10 animate-pulse rounded-lg bg-card/80", w)}
+              />
+            ))}
+          </div>
+        ) : loadError && messages.length === 0 ? (
+          <div className="mx-auto mt-10 flex max-w-xs flex-col items-center rounded-xl border border-border bg-card px-6 py-6 text-center shadow-xs">
+            <AlertCircle className="size-6 text-destructive" />
+            <p className="mt-2 text-sm font-medium text-foreground">
+              Couldn&apos;t load messages
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{loadError}</p>
+            {onRefresh && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={handleRefreshClick}
+              >
+                <RefreshCw />
+                Try again
+              </Button>
+            )}
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-sm text-muted-foreground">No messages yet</p>
-            <p className="text-xs text-muted-foreground">
-              Send a template to start the conversation
+          <div className="mx-auto mt-10 flex max-w-xs flex-col items-center rounded-xl border border-border bg-card px-6 py-6 text-center shadow-xs">
+            <p className="text-sm font-medium text-foreground">
+              No messages yet
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              WhatsApp only lets a business start a chat with an approved
+              template.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={handleOpenTemplates}
+            >
+              Choose a template
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -1039,7 +1125,7 @@ export function MessageThread({
               <div key={group.date}>
                 {/* Date separator */}
                 <div className="mb-4 flex items-center justify-center">
-                  <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded-md border border-border bg-card px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground shadow-xs">
                     {formatDateSeparator(group.date)}
                   </span>
                 </div>

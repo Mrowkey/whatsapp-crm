@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "wacrm-demo",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_PUBLIC_DISABLE_AUTH=true&& set DISABLE_AUTH=true&& npx next dev -p 3100"],
+      "port": 3100
     }
   ]
 }

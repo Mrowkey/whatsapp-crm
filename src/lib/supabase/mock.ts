@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
+import { MOCK_FIXTURES } from './mock-fixtures'
 
 const DEMO_EMAIL = 'demo@localhost'
 
@@ -219,6 +220,17 @@ class MockQueryBuilder implements PromiseLike<QueryResult> {
 
     if (this.table === 'flow_nodes') {
       return []
+    }
+
+    // Sample rows for the demo workspace, narrowed by any `.eq()` on a
+    // column the rows actually carry (e.g. messages by conversation_id).
+    const fixture = MOCK_FIXTURES[this.table]
+    if (fixture) {
+      return fixture.filter((row) =>
+        [...this.eqFilters].every(
+          ([column, value]) => !(column in row) || row[column] === value,
+        ),
+      )
     }
 
     return []

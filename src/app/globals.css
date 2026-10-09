@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
 
 @theme inline {
   --color-background: var(--background);
@@ -45,6 +45,17 @@
    * --card-2) as Tailwind utilities: bg-card-2, bg-primary-soft,
    * bg-primary-soft-2, hover:bg-primary-hover. */
   --color-card-2: var(--card-2);
+  --color-bubble-out: var(--bubble-out);
+  --color-bubble-out-foreground: var(--bubble-out-foreground);
+  --color-bubble-in: var(--bubble-in);
+  --color-bubble-in-foreground: var(--bubble-in-foreground);
+  --color-chat-bg: var(--chat-bg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-2: var(--primary-soft-2);
@@ -61,7 +72,7 @@
  * THEMING — two orthogonal dimensions
  *
  *   1. MODE   (light / dark)  → neutral surfaces. Selected with
- *      `document.documentElement.dataset.mode`. Defaults to dark.
+ *      `document.documentElement.dataset.mode`. Defaults to light.
  *   2. ACCENT (violet / …)    → the primary color only. Selected
  *      with `document.documentElement.dataset.theme`.
  *
@@ -84,91 +95,154 @@
  * project/Color Themes.html — change one, change the other.
  * ============================================================ */
 
-/* ---- MODE: neutral surfaces ---- */
+/* ---- MODE: neutral surfaces and brand green ----
+ * Light is the default identity: white content surfaces on a cool
+ * neutral canvas, hairline borders, WhatsApp-adjacent green for
+ * primary actions and "live" statuses. Dark keeps the same roles.
+ *
+ * Extra tokens beyond the shadcn set:
+ *   --bubble-out / --bubble-in  inbox message bubbles
+ *   --chat-bg                   inbox thread canvas
+ *   --success / --warning / --info (+ -soft)  status badges
+ */
 
 :root,
-html[data-mode="dark"] {
-  --background: #0F1115;
-  --foreground: #F3F4F6;
-  --card: #171A20;
-  --card-2: #1D222B;
-  --card-foreground: #F3F4F6;
-  --popover: #171A20;
-  --popover-foreground: #F3F4F6;
-  --secondary: #1D222B;
-  --secondary-foreground: #F3F4F6;
-  --muted: #1D222B;
-  --muted-foreground: #8B92A0;
-  --accent: #1D222B;
-  --accent-foreground: #F3F4F6;
-  --accent-live: #E8622C;
-  --accent-success: #1B8A5A;
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: #262A33;
-  --input: #262A33;
-  --chart-1: #2E5EAA;
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --primary: #2E5EAA;
-  --primary-foreground: #F3F4F6;
-  --primary-hover: #3B6CC0;
-  --primary-soft: rgb(46 94 170 / 0.12);
-  --primary-soft-2: rgb(46 94 170 / 0.2);
-  --ring: #2E5EAA;
-  --sidebar: #171A20;
-  --sidebar-foreground: #F3F4F6;
-  --sidebar-accent: #1D222B;
-  --sidebar-accent-foreground: #F3F4F6;
-  --sidebar-border: #262A33;
-  --sidebar-primary: #2E5EAA;
-  --sidebar-primary-foreground: #F3F4F6;
-  --sidebar-ring: #2E5EAA;
-}
-
 html[data-mode="light"] {
-  --background: #F7F6F3;
-  --foreground: #14171C;
-  --card: #FBFAF8;
-  --card-2: #ECE9E3;
-  --card-foreground: #14171C;
-  --popover: #FBFAF8;
-  --popover-foreground: #14171C;
-  --secondary: #ECE9E3;
-  --secondary-foreground: #14171C;
-  --muted: #ECE9E3;
-  --muted-foreground: #5B6270;
-  --accent: #ECE9E3;
-  --accent-foreground: #14171C;
+  --background: #F5F6F8;
+  --foreground: #111827;
+  --card: #FFFFFF;
+  --card-2: #F3F4F6;
+  --card-foreground: #111827;
+  --popover: #FFFFFF;
+  --popover-foreground: #111827;
+  --secondary: #F3F4F6;
+  --secondary-foreground: #111827;
+  --muted: #F3F4F6;
+  --muted-foreground: #5F6B7A;
+  --accent: #F3F4F6;
+  --accent-foreground: #111827;
   --accent-live: #D9531F;
-  --accent-success: #167A4E;
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: #E4E1DB;
-  --input: #E4E1DB;
-  --chart-1: #24508F;
-  --chart-2: oklch(0.6 0.1 260);
-  --chart-3: oklch(0.7 0.06 260);
-  --chart-4: oklch(0.8 0.04 260);
-  --chart-5: oklch(0.87 0.03 260);
-  --radius: 0.625rem;
-  --primary: #24508F;
-  --primary-foreground: #F3F4F6;
-  --primary-hover: #2F5FA8;
-  --primary-soft: rgb(36 80 143 / 0.12);
-  --primary-soft-2: rgb(36 80 143 / 0.2);
-  --ring: #24508F;
-  --sidebar: #FBFAF8;
-  --sidebar-foreground: #14171C;
-  --sidebar-accent: #ECE9E3;
-  --sidebar-accent-foreground: #14171C;
-  --sidebar-border: #E4E1DB;
-  --sidebar-primary: #24508F;
-  --sidebar-primary-foreground: #F3F4F6;
-  --sidebar-ring: #24508F;
+  --accent-success: #0A7C55;
+  --destructive: #D92D20;
+  --border: #E4E7EC;
+  --input: #D0D5DD;
+  --chart-1: #0A7C55;
+  --chart-2: #2E6FD9;
+  --chart-3: #E0A019;
+  --chart-4: #8B5CF6;
+  --chart-5: #98A2B3;
+  --radius: 0.5rem;
+  --primary: #0A7C55;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #086846;
+  --primary-soft: rgb(10 124 85 / 0.09);
+  --primary-soft-2: rgb(10 124 85 / 0.16);
+  --ring: #0A7C55;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #111827;
+  --sidebar-accent: #F3F4F6;
+  --sidebar-accent-foreground: #111827;
+  --sidebar-border: #E4E7EC;
+  --sidebar-primary: #0A7C55;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-ring: #0A7C55;
+  --bubble-out: #D9FDD3;
+  --bubble-out-foreground: #111B21;
+  --bubble-in: #FFFFFF;
+  --bubble-in-foreground: #111B21;
+  --chat-bg: #F0F2F0;
+  --success: #067647;
+  --success-soft: #ECFDF3;
+  --warning: #B54708;
+  --warning-soft: #FFFAEB;
+  --info: #175CD3;
+  --info-soft: #EFF8FF;
+
+  /* Many screens were authored dark-first with pale status text
+   * (text-red-400, text-amber-300 …). Those shades are unreadable on
+   * white, so in light mode the pale steps resolve to their dark
+   * counterparts. Tinted fills (bg-*-500/10) are unaffected. */
+  --color-red-200: #B42318;
+  --color-red-300: #B42318;
+  --color-red-400: #D92D20;
+  --color-amber-200: #93370D;
+  --color-amber-300: #B54708;
+  --color-amber-400: #B54708;
+  --color-yellow-400: #A15C07;
+  --color-emerald-300: #067647;
+  --color-emerald-400: #067647;
+  --color-green-400: #067647;
+  --color-blue-300: #175CD3;
+  --color-blue-400: #175CD3;
+  --color-purple-400: #6938EF;
 }
 
+html[data-mode="dark"] {
+  --background: #0E1113;
+  --foreground: #F2F4F7;
+  --card: #15191C;
+  --card-2: #1C2125;
+  --card-foreground: #F2F4F7;
+  --popover: #181C20;
+  --popover-foreground: #F2F4F7;
+  --secondary: #1C2125;
+  --secondary-foreground: #F2F4F7;
+  --muted: #1C2125;
+  --muted-foreground: #98A2B3;
+  --accent: #1C2125;
+  --accent-foreground: #F2F4F7;
+  --accent-live: #E8622C;
+  --accent-success: #2FBF83;
+  --destructive: #F97066;
+  --border: #262C31;
+  --input: #333A40;
+  --chart-1: #2FBF83;
+  --chart-2: #5B9BF5;
+  --chart-3: #F0B429;
+  --chart-4: #A78BFA;
+  --chart-5: #667085;
+  --radius: 0.5rem;
+  --primary: #23A26D;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #2BB67B;
+  --primary-soft: rgb(47 191 131 / 0.12);
+  --primary-soft-2: rgb(47 191 131 / 0.2);
+  --ring: #2FBF83;
+  --sidebar: #15191C;
+  --sidebar-foreground: #F2F4F7;
+  --sidebar-accent: #1C2125;
+  --sidebar-accent-foreground: #F2F4F7;
+  --sidebar-border: #262C31;
+  --sidebar-primary: #23A26D;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-ring: #2FBF83;
+  --bubble-out: #005C4B;
+  --bubble-out-foreground: #E9EDEF;
+  --bubble-in: #1F272B;
+  --bubble-in-foreground: #E9EDEF;
+  --chat-bg: #0B0F11;
+  --success: #47CD89;
+  --success-soft: rgb(71 205 137 / 0.12);
+  --warning: #FDB022;
+  --warning-soft: rgb(253 176 34 / 0.12);
+  --info: #53B1FD;
+  --info-soft: rgb(83 177 253 / 0.12);
+
+  /* Restore the stock pale steps overridden for light mode above. */
+  --color-red-200: oklch(88.5% 0.062 18.334);
+  --color-red-300: oklch(80.8% 0.114 19.571);
+  --color-red-400: oklch(70.4% 0.191 22.216);
+  --color-amber-200: oklch(92.4% 0.12 95.746);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-amber-400: oklch(82.8% 0.189 84.429);
+  --color-yellow-400: oklch(85.2% 0.199 91.936);
+  --color-emerald-300: oklch(84.5% 0.143 164.978);
+  --color-emerald-400: oklch(76.5% 0.177 163.223);
+  --color-green-400: oklch(79.2% 0.209 151.711);
+  --color-blue-300: oklch(80.9% 0.105 251.813);
+  --color-blue-400: oklch(70.7% 0.165 254.624);
+  --color-purple-400: oklch(71.4% 0.203 305.504);
+}
 /* ---- ACCENT: primary color ----
  * Disabled while the fixed brand palette is the single identity.
  * The mode blocks above now own --primary* / --ring / --sidebar-* /
@@ -254,8 +328,26 @@ html[data-theme="rose"] {
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
   }
   html {
     @apply font-sans;
+  }
+  /* Page-level headings were authored at text-2xl/bold; B2B density
+   * wants them quieter. Scoped to <main> so dialogs keep their own. */
+  main h1 {
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: var(--primary-soft-2);
+  }
+}
+
+@layer utilities {
+  /* Thin, unobtrusive scrollbars for panes that scroll independently. */
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
 }

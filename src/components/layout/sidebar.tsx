@@ -6,64 +6,25 @@ import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
-  Bell,
+  BarChart3,
   Crown,
   GitBranch,
   LayoutDashboard,
   LogOut,
-  MessageSquare,
-  Radio,
+  Megaphone,
+  MessageSquareText,
+  MessagesSquare,
   Settings,
   Shield,
   User,
   UserCog,
   Users,
-  UsersRound,
   Workflow,
   X,
   Zap,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
-
-// Per-role chip metadata used in the sidebar's account strip + the
-// Members tab roster. Keeping this near both consumers in a single
-// place avoids drift between the two surfaces — when a designer
-// wants to recolour "agent" rows, this is the one diff.
-const ROLE_CHIP: Record<
-  AccountRole,
-  { icon: typeof Crown; label: string; className: string }
-> = {
-  owner: {
-    icon: Crown,
-    label: "Owner",
-    // Amber: scarce, immutable, "the boss" — gets visual emphasis.
-    className:
-      "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  },
-  admin: {
-    icon: Shield,
-    label: "Admin",
-    // Primary-tinted: significant but not as scarce as owner.
-    className:
-      "border-primary/40 bg-primary/10 text-primary",
-  },
-  agent: {
-    icon: UserCog,
-    label: "Agent",
-    // Neutral slate: the operational default.
-    className:
-      "border-border bg-muted text-foreground",
-  },
-  viewer: {
-    icon: User,
-    label: "Viewer",
-    // Muted slate: read-only role; visually quieter than agent.
-    className:
-      "border-border bg-card text-muted-foreground",
-  },
-};
 import {
   Avatar,
   AvatarFallback,
@@ -77,6 +38,33 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Per-role chip metadata for the account strip in the sidebar footer.
+const ROLE_CHIP: Record<
+  AccountRole,
+  { icon: typeof Crown; label: string; className: string }
+> = {
+  owner: {
+    icon: Crown,
+    label: "Owner",
+    className: "bg-warning-soft text-warning",
+  },
+  admin: {
+    icon: Shield,
+    label: "Admin",
+    className: "bg-primary-soft text-primary",
+  },
+  agent: {
+    icon: UserCog,
+    label: "Agent",
+    className: "bg-muted text-foreground",
+  },
+  viewer: {
+    icon: User,
+    label: "Viewer",
+    className: "bg-muted text-muted-foreground",
+  },
+};
+
 interface NavItem {
   href: string;
   label: string;
@@ -88,19 +76,40 @@ interface NavItem {
   beta?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/inbox", label: "Inbox", icon: MessageSquare },
-  { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/pipelines", label: "Pipelines", icon: GitBranch },
-  { href: "/broadcasts", label: "Broadcasts", icon: Radio },
-  { href: "/automations", label: "Automations", icon: Zap },
-  { href: "/flows", label: "Flows", icon: Workflow, beta: true },
-];
+interface NavGroup {
+  /** Omitted for the first, unlabelled group. */
+  label?: string;
+  items: NavItem[];
+}
 
-const bottomNavItems = [
-  { href: "/settings", label: "Settings", icon: Settings },
+// Grouped by job-to-be-done rather than one flat list: talk to
+// customers, manage them, reach out at scale, then measure.
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/inbox", label: "Team Inbox", icon: MessagesSquare },
+    ],
+  },
+  {
+    label: "CRM",
+    items: [
+      { href: "/contacts", label: "Contacts", icon: Users },
+      { href: "/pipelines", label: "Pipelines", icon: GitBranch },
+    ],
+  },
+  {
+    label: "Engage",
+    items: [
+      { href: "/broadcasts", label: "Campaigns", icon: Megaphone },
+      { href: "/automations", label: "Automations", icon: Zap },
+      { href: "/flows", label: "Flows", icon: Workflow, beta: true },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [{ href: "/analytics", label: "Analytics", icon: BarChart3 }],
+  },
 ];
 
 interface SidebarProps {
@@ -109,19 +118,26 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+function navRowClass(isActive: boolean) {
+  return cn(
+    // Taller on touch so fingers hit the row reliably (≥44px); compact on lg+.
+    "group relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13px] font-medium transition-colors lg:py-1.5",
+    "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+    isActive
+      ? "bg-primary-soft text-primary"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+  );
+}
+
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
-  const unreadNotifications = useUnreadNotifications();
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
-  // here would just duplicate the user name in the footer below. Once
-  // the account is renamed or the user joins a shared account, the
-  // name diverges and the strip becomes meaningful — that's the signal
-  // we gate on. Wait for the profile fetch to settle first, otherwise
-  // the strip flashes in once the row resolves (a layout jump).
+  // here would just duplicate the user name in the footer below. Wait
+  // for the profile fetch to settle first to avoid a layout jump.
   const showAccountStrip =
     !profileLoading &&
     !!account?.name &&
@@ -151,17 +167,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     };
   }, [open, onClose]);
 
+  const settingsActive = pathname.startsWith("/settings");
+
   return (
     <>
-      {/* Backdrop — only exists on mobile and only when open. Clicking
-          it closes the drawer. Hidden from lg+ since the sidebar is
-          part of the main flex row there. */}
+      {/* Backdrop — only exists on mobile and only when open. */}
       <button
         type="button"
         aria-label="Close menu"
+        tabIndex={open ? 0 : -1}
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-30 bg-background/70 backdrop-blur-sm transition-opacity lg:hidden",
+          "fixed inset-0 z-30 bg-foreground/30 transition-opacity lg:hidden",
           open
             ? "pointer-events-auto opacity-100"
             : "pointer-events-none opacity-0",
@@ -171,22 +188,24 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-border bg-card",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-56 lg:translate-x-0 lg:transition-none",
         )}
         aria-label="Primary"
       >
-        {/* Logo row. On mobile we put a close button here; on desktop the
-            close button is hidden since the sidebar is always-visible. */}
-        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">
+        {/* Brand row. The close button only exists on mobile. */}
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-3">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 rounded-md px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <MessageSquareText className="size-4" />
+            </span>
+            <span className="text-[15px] font-semibold tracking-tight text-foreground">
               Relay
             </span>
           </Link>
@@ -194,196 +213,142 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+            className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
           >
-            <X className="h-5 w-5" />
+            <X className="size-5" />
           </button>
         </div>
 
-        {/* Main navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+        <nav className="scroll-thin flex-1 overflow-y-auto px-2 py-3">
+          {NAV_GROUPS.map((group, i) => (
+            <div key={group.label ?? i} className={cn(i > 0 && "mt-4")}>
+              {group.label && (
+                <p className="mb-1 px-2.5 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">
+                  {group.label}
+                </p>
+              )}
+              <ul className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const isActive =
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
+                  const showUnread = item.href === "/inbox" && totalUnread > 0;
 
-              const showUnreadDot =
-                item.href === "/inbox" && totalUnread > 0 && !isActive;
-
-              // Unlike the inbox dot, the notifications count stays visible
-              // even while the page is active — it reflects unread state
-              // (cleared by marking notifications read), not "currently
-              // viewing this section".
-              const showNotificationBadge =
-                item.href === "/notifications" && unreadNotifications > 0;
-
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      // Taller on mobile so fingers can hit the row reliably (≥44px).
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
-                    {item.beta && (
-                      <span
-                        aria-label="Beta feature"
-                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        aria-current={isActive ? "page" : undefined}
+                        className={navRowClass(isActive)}
                       >
-                        Beta
-                      </span>
-                    )}
-                    {showUnreadDot && (
-                      <span
-                        aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
-                        className="relative flex h-2 w-2"
-                      >
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                      </span>
-                    )}
-                    {showNotificationBadge && (
-                      <span
-                        aria-label={`${unreadNotifications} unread notification${unreadNotifications === 1 ? "" : "s"}`}
-                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
-                      >
-                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          <div className="my-4 border-t border-border" />
-
-          <ul className="flex flex-col gap-1">
-            {bottomNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                        <item.icon className="size-4 shrink-0" />
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {item.beta && (
+                          <span
+                            aria-label="Beta feature"
+                            className="rounded bg-warning-soft px-1 py-px text-[10px] font-semibold tracking-wide text-warning uppercase"
+                          >
+                            Beta
+                          </span>
+                        )}
+                        {showUnread && (
+                          <span
+                            aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
+                            className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums"
+                          >
+                            {totalUnread > 99 ? "99+" : totalUnread}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
 
-        {/* User section */}
-        <div className="shrink-0 border-t border-border p-3">
-          {/* Account name display — surfaced only when the account
-              name differs from the user's own name (see
-              `showAccountStrip`). For a default solo account the two
-              match, so we hide it to avoid duplicating the user name
-              below; for renamed or shared accounts it tells the user
-              which account they're acting in. */}
+        <div className="shrink-0 border-t border-sidebar-border p-2">
+          <Link
+            href="/settings"
+            aria-current={settingsActive ? "page" : undefined}
+            className={navRowClass(settingsActive)}
+          >
+            <Settings className="size-4 shrink-0" />
+            Settings
+          </Link>
+
+          {/* Account name — surfaced only when it differs from the
+              user's own name (see `showAccountStrip`). */}
           {showAccountStrip && account?.name ? (
-            <div className="mb-2 flex items-center gap-2 px-3 text-xs text-muted-foreground">
-              <UsersRound className="size-3.5 shrink-0" />
-              {/* `title=` exposes the full name on hover when it
-                  gets truncated (long account names + narrow
-                  sidebars). Cheap a11y win. */}
+            <div className="mt-2 flex items-center gap-2 px-2.5 text-xs text-muted-foreground">
               <span className="truncate" title={account.name}>
                 {account.name}
               </span>
-              {accountRole ? (
-                // Always render the chip — owners used to be
-                // invisible here, which made them indistinguishable
-                // from admins at a glance. Now everyone sees their
-                // role (with a colour cue) regardless of tier.
-                (() => {
-                  const meta = ROLE_CHIP[accountRole];
-                  const Icon = meta.icon;
-                  return (
-                    <span
-                      className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${meta.className}`}
-                    >
-                      <Icon className="size-3" />
-                      {meta.label}
-                    </span>
-                  );
-                })()
-              ) : null}
+              {accountRole
+                ? (() => {
+                    const meta = ROLE_CHIP[accountRole];
+                    const Icon = meta.icon;
+                    return (
+                      <span
+                        className={cn(
+                          "ml-auto inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
+                          meta.className,
+                        )}
+                      >
+                        <Icon className="size-3" />
+                        {meta.label}
+                      </span>
+                    );
+                  })()
+                : null}
             </div>
           ) : null}
+
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60 focus:bg-muted/60 focus:outline-none data-popup-open:bg-muted/60">
-              <Avatar className="size-8 shrink-0">
+            <DropdownMenuTrigger className="mt-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none data-popup-open:bg-muted">
+              <Avatar className="size-7 shrink-0">
                 {profile?.avatar_url ? (
                   <AvatarImage
                     src={profile.avatar_url}
                     alt={profile.full_name ?? "Avatar"}
                   />
                 ) : null}
-                <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+                <AvatarFallback className="bg-primary-soft text-xs font-semibold text-primary">
                   {profile?.full_name?.charAt(0)?.toUpperCase() ??
                     profile?.email?.charAt(0)?.toUpperCase() ??
                     "U"}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">
+                <p className="truncate text-[13px] leading-tight font-medium text-foreground">
                   {profile?.full_name ?? "User"}
                 </p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="truncate text-[11px] leading-tight text-muted-foreground">
                   {profile?.email ?? ""}
                 </p>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              align="end"
+              align="start"
               side="top"
               sideOffset={6}
-              className="min-w-56 bg-popover text-popover-foreground ring-border"
+              className="min-w-52"
             >
               <DropdownMenuItem
-                render={
-                  <Link
-                    href="/settings?tab=profile"
-                    onClick={onClose}
-                    className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-                  />
-                }
+                render={<Link href="/settings?tab=profile" onClick={onClose} />}
               >
                 <User className="size-4" />
                 Profile
               </DropdownMenuItem>
               <DropdownMenuItem
-                render={
-                  <Link
-                    href="/settings?tab=whatsapp"
-                    onClick={onClose}
-                    className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-                  />
-                }
+                render={<Link href="/settings?tab=whatsapp" onClick={onClose} />}
               >
                 <Settings className="size-4" />
-                Settings
+                WhatsApp settings
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem
-                onClick={signOut}
-                className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-              >
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={signOut}>
                 <LogOut className="size-4" />
                 Sign out
               </DropdownMenuItem>

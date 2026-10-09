@@ -13,6 +13,7 @@ import {
   LayoutTemplate,
   ImageOff,
   CornerDownLeft,
+  Bot,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -30,15 +31,15 @@ interface MessageBubbleProps {
 function StatusIcon({ status }: { status: Message["status"] }) {
   switch (status) {
     case "sending":
-      return <Clock className="h-3 w-3 text-muted-foreground" />;
+      return <Clock className="size-3 opacity-60" aria-label="Sending" />;
     case "sent":
-      return <Check className="h-3 w-3 text-muted-foreground" />;
+      return <Check className="size-3.5 opacity-60" aria-label="Sent" />;
     case "delivered":
-      return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
+      return <CheckCheck className="size-3.5 opacity-60" aria-label="Delivered" />;
     case "read":
-      return <CheckCheck className="h-3 w-3 text-blue-400" />;
+      return <CheckCheck className="size-3.5 text-sky-500" aria-label="Read" />;
     case "failed":
-      return <XCircle className="h-3 w-3 text-red-400" />;
+      return <XCircle className="size-3.5 text-destructive" aria-label="Failed" />;
     default:
       return null;
   }
@@ -181,7 +182,7 @@ function MessageContent({ message }: { message: Message }) {
           href={message.media_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm hover:bg-muted"
+          className="flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 text-sm hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15"
         >
           <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
           <span className="truncate">
@@ -193,7 +194,7 @@ function MessageContent({ message }: { message: Message }) {
     case "template":
       return (
         <div>
-          <span className="mb-1 inline-flex items-center gap-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+          <span className="mb-1 inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium opacity-80 dark:bg-white/10">
             <LayoutTemplate className="h-3 w-3" />
             Template
           </span>
@@ -259,6 +260,8 @@ export function MessageBubble({
   onToggleReaction,
 }: MessageBubbleProps) {
   const isAgent = message.sender_type === "agent" || message.sender_type === "bot";
+  const isBot = message.sender_type === "bot";
+  const failed = message.status === "failed";
   const time = format(new Date(message.created_at), "HH:mm");
 
   // Row alignment + width cap are owned by <MessageActions> so its hover
@@ -272,41 +275,42 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
+          "relative rounded-lg px-2.5 py-1.5 shadow-xs",
           isAgent
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-muted text-foreground",
+            ? "rounded-tr-sm bg-bubble-out text-bubble-out-foreground"
+            : "rounded-tl-sm bg-bubble-in text-bubble-in-foreground",
+          failed && "ring-1 ring-destructive/50",
         )}
       >
+        {isBot && (
+          <span className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold tracking-wide uppercase opacity-60">
+            <Bot className="size-3" />
+            Automated
+          </span>
+        )}
         {reply && (
           <ReplyQuote
             authorLabel={reply.authorLabel}
             preview={reply.preview}
-            onPrimary={isAgent}
           />
         )}
         <MessageContent message={message} />
         <div
           className={cn(
-            "mt-1 flex items-center gap-1",
+            "mt-0.5 flex items-center gap-1",
             isAgent ? "justify-end" : "justify-start",
           )}
         >
-          <span
-            className={cn(
-              "text-[10px]",
-              // Outbound bubbles sit on the primary fill, so the
-              // timestamp must read against that (not the neutral
-              // foreground) — otherwise it goes low-contrast in light
-              // mode. Inbound bubbles use the muted surface.
-              isAgent ? "text-primary-foreground/70" : "text-muted-foreground",
-            )}
-          >
-            {time}
-          </span>
+          <span className="text-[10px] tabular-nums opacity-60">{time}</span>
           {isAgent && <StatusIcon status={message.status} />}
         </div>
       </div>
+      {failed && (
+        <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-destructive">
+          <XCircle className="size-3" />
+          Not delivered
+        </p>
+      )}
       {reactions && reactions.length > 0 && onToggleReaction && (
         <MessageReactions
           reactions={reactions}

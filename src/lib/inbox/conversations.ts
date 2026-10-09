@@ -69,3 +69,84 @@ export function matchesContactFilters(
 
   return true;
 }
+
+/**
+ * Top-level Inbox views. `mine` / `unassigned` slice by assignment,
+ * `unread` by unread count; `all` is everything. Orthogonal to the
+ * status filter (open / pending / closed), which is applied separately.
+ */
+export type InboxView = "all" | "unread" | "mine" | "unassigned";
+
+export const INBOX_VIEWS: readonly InboxView[] = [
+  "all",
+  "unread",
+  "mine",
+  "unassigned",
+];
+
+export function matchesInboxView(
+  conversation: Conversation,
+  view: InboxView,
+  currentUserId: string | null | undefined,
+): boolean {
+  switch (view) {
+    case "unread":
+      return conversation.unread_count > 0;
+    case "mine":
+      return (
+        !!currentUserId && conversation.assigned_agent_id === currentUserId
+      );
+    case "unassigned":
+      return !conversation.assigned_agent_id;
+    default:
+      return true;
+  }
+}
+
+/** Per-view conversation counts for the Inbox view tabs. */
+export function countInboxViews(
+  conversations: Conversation[],
+  currentUserId: string | null | undefined,
+): Record<InboxView, number> {
+  const counts: Record<InboxView, number> = {
+    all: 0,
+    unread: 0,
+    mine: 0,
+    unassigned: 0,
+  };
+  for (const c of conversations) {
+    for (const view of INBOX_VIEWS) {
+      if (matchesInboxView(c, view, currentUserId)) counts[view] += 1;
+    }
+  }
+  return counts;
+}
+
+/**
+ * Compact timestamp for a conversation row: "now", "5m", "3h", then the
+ * weekday within the last week, then a short date. `now` is injectable
+ * for tests.
+ */
+export function formatConversationTime(
+  iso: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  if (!iso) return "";
+  const then = new Date(iso);
+  const diffMs = now.getTime() - then.getTime();
+  if (Number.isNaN(diffMs)) return "";
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) {
+    return then.toLocaleDateString(undefined, { weekday: "short" });
+  }
+  return then.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    ...(then.getFullYear() !== now.getFullYear() ? { year: "2-digit" } : {}),
+  });
+}

@@ -22,7 +22,7 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#3457b2", // primary (cobalt)
+          background: "#0A7C55", // primary (brand green)
           borderRadius: 6,
         }}
       >

@@ -13,6 +13,8 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { WifiOff } from "lucide-react";
+import Link from "next/link";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
@@ -64,7 +66,15 @@ export default function InboxPage() {
     }
   }, []);
 
+  // Below xl there isn't room to dock the customer panel beside the
+  // thread, so the same toggle opens it as a slide-over sheet instead.
+  const [contactSheetOpen, setContactSheetOpen] = useState(false);
+
   const handleToggleContactPanel = useCallback(() => {
+    if (!window.matchMedia("(min-width: 1280px)").matches) {
+      setContactSheetOpen(true);
+      return;
+    }
     setContactPanelOpen((prev) => {
       const next = !prev;
       try {
@@ -548,15 +558,25 @@ export default function InboxPage() {
   const hasActiveConv = !!activeConversation;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
+    <div className="-m-4 flex h-[calc(100dvh-3rem)] flex-col overflow-hidden sm:-m-6">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (
-        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
-          <WifiOff className="h-4 w-4 text-amber-400" />
-          <p className="text-xs text-amber-400">
-            WhatsApp® is not connected. Go to Settings to connect your account.
+        <div
+          role="status"
+          className="flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-border bg-warning-soft px-4 py-2"
+        >
+          <p className="flex items-center gap-2 text-xs text-warning">
+            <WifiOff className="size-3.5 shrink-0" />
+            WhatsApp is not connected, so messages can&apos;t be sent or
+            received.
           </p>
+          <Link
+            href="/settings?tab=whatsapp"
+            className="text-xs font-semibold text-warning underline underline-offset-2"
+          >
+            Connect in Settings
+          </Link>
         </div>
       )}
 
@@ -617,11 +637,21 @@ export default function InboxPage() {
             On mobile it's always hidden (the `lg:block` below), so the
             toggle — which is itself desktop-only — never affects it. */}
         {contactPanelOpen && (
-          <div className="hidden lg:block">
+          <div className="hidden xl:block">
             <ContactSidebar contact={activeContact} />
           </div>
         )}
       </div>
+
+      <Sheet open={contactSheetOpen} onOpenChange={setContactSheetOpen}>
+        <SheetContent side="right" className="w-80 max-w-[88vw] gap-0 p-0">
+          <SheetTitle className="sr-only">Customer details</SheetTitle>
+          <ContactSidebar
+            contact={activeContact}
+            className="w-full border-l-0"
+          />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

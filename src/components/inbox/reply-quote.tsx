@@ -36,7 +36,7 @@ export function ReplyQuote({
           ? "rounded-md bg-muted/80"
           : onPrimary
             ? "mb-1.5 rounded-md bg-primary-foreground/15"
-            : "mb-1.5 rounded-md bg-background/20",
+            : "mb-1.5 rounded-md bg-black/5 dark:bg-white/10",
       )}
     >
       <div className="min-w-0 flex-1 overflow-hidden">

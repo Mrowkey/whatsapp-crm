@@ -435,18 +435,23 @@ export function MessageComposer({
         </div>
       )}
       {sessionExpired && (
-        <div className="mb-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2">
-          <p className="text-xs text-amber-400">
-            24-hour session expired. Use a template to re-engage.
+        <div
+          role="status"
+          className="mb-2 flex items-center justify-between gap-3 rounded-md bg-warning-soft px-3 py-2"
+        >
+          <p className="text-xs text-warning">
+            <span className="font-semibold">Reply window closed.</span> WhatsApp
+            allows free-form replies only within 24 hours of the customer&apos;s
+            last message. Send an approved template to re-open the chat.
           </p>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-7 text-xs text-amber-400 hover:text-amber-300"
+            className="shrink-0"
             onClick={onOpenTemplates}
           >
-            <LayoutTemplate className="mr-1 h-3 w-3" />
-            Templates
+            <LayoutTemplate />
+            Choose template
           </Button>
         </div>
       )}
@@ -494,7 +499,7 @@ export function MessageComposer({
         />
       ) : recording ? (
         // Recording bar — replaces the composer while the mic is live.
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-muted px-4 py-2.5">
+        <div className="flex items-center gap-3 rounded-lg border border-input bg-card px-3 py-2">
           <span className="flex h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" />
           <span className="flex-1 text-sm text-foreground">
             Recording… {formatDuration(recordSeconds)} /{" "}
@@ -517,7 +522,14 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        <div className="flex items-end gap-2">
+        // One bordered box: the textarea takes the first row (`order-first
+        // basis-full`), the tool buttons and Send sit on the row beneath.
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-0.5 rounded-lg border border-input bg-card p-1.5 transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/25",
+            (sessionExpired || readOnly) && "bg-muted/60",
+          )}
+        >
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -529,7 +541,8 @@ export function MessageComposer({
                     ? undefined
                     : "Attach media"
               }
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Attach media"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -563,7 +576,8 @@ export function MessageComposer({
             canAct={!readOnly}
             gateReason="send messages"
             title={readOnly ? undefined : "Send template"}
-            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+            aria-label="Send template"
+            className="size-8 shrink-0 p-0 text-muted-foreground hover:text-foreground"
             onClick={onOpenTemplates}
           >
             <LayoutTemplate className="h-4 w-4" />
@@ -576,7 +590,8 @@ export function MessageComposer({
             gateReason="send messages"
             disabled={drafting}
             title={readOnly ? undefined : "Draft a reply with AI"}
-            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-primary"
+            aria-label="Draft a reply with AI"
+            className="size-8 shrink-0 p-0 text-muted-foreground hover:text-primary"
             onClick={handleDraft}
           >
             {drafting ? (
@@ -593,22 +608,27 @@ export function MessageComposer({
             onKeyDown={handleKeyDown}
             placeholder={
               readOnly
-                ? "Read-only — viewers can browse but not reply"
+                ? "Read-only: viewers can browse but not reply"
                 : sessionExpired
-                  ? "Session expired - use a template"
-                  : "Type a message... (Shift+Enter for new line)"
+                  ? "Reply window closed. Send a template instead."
+                  : "Type a message"
             }
             disabled={sessionExpired || readOnly}
-            rows={1}
+            rows={2}
+            aria-label="Message"
             // Textarea keeps its own inline title — the GatedButton
             // wrapping pattern doesn't apply to non-button inputs.
             // The placeholder text also surfaces the read-only state.
             title={readOnly ? "Read-only — your role can't send messages" : undefined}
             className={cn(
-              "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
-              (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
+              "order-first max-h-40 basis-full resize-none bg-transparent px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground",
+              (sessionExpired || readOnly) && "cursor-not-allowed opacity-60"
             )}
           />
+
+          {/* Spacer: GatedButton wraps in a span, so ml-auto on the
+              button itself wouldn't push it to the right edge. */}
+          <span className="flex-1" />
 
           <GatedButton
             size="sm"
@@ -616,9 +636,10 @@ export function MessageComposer({
             gateReason="send messages"
             disabled={!text.trim() || sessionExpired || sending}
             onClick={handleSend}
-            className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40"
+            className="h-8 shrink-0 px-3 disabled:opacity-40"
           >
-            <Send className="h-4 w-4" />
+            {sending ? <Loader2 className="animate-spin" /> : <Send />}
+            Send
           </GatedButton>
         </div>
       )}
@@ -627,7 +648,10 @@ export function MessageComposer({
           `items-end` buttons below the textarea. Indented to line up
           under the textarea left edge. */}
       {!draft && !recording && (
-        <p className="mt-1 pl-[5.5rem] text-[10px] text-muted-foreground">
+        <p className="mt-1.5 hidden text-[11px] text-muted-foreground sm:block">
+          <kbd className="font-sans font-medium">Enter</kbd> to send,{" "}
+          <kbd className="font-sans font-medium">Shift + Enter</kbd> for a new
+          line.{" "}
           Tap the ✨ to draft a reply with AI — you can edit it before sending
         </p>
       )}
@@ -657,7 +681,7 @@ function MediaDraftPreview({
   onSend: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/40 p-3">
+    <div className="rounded-lg border border-input bg-card p-3">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           {draft.kind === "image" && (
@@ -704,7 +728,7 @@ function MediaDraftPreview({
               }
             }}
             placeholder="Add a caption…"
-            className="flex-1 rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50"
+            className="h-8 flex-1 rounded-md border border-input bg-card px-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25"
           />
         )}
         <GatedButton
