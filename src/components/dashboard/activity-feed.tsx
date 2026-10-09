@@ -76,7 +76,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
           <EmptyState
             icon={Inbox}
             title="No activity yet"
-            hint="Activity from messages, deals, broadcasts, and automations will appear here."
+            hint="Activity from messages, deals, campaigns, and automations will appear here."
           />
         </div>
       ) : (

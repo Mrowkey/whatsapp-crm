@@ -6,7 +6,7 @@ import { ChevronRight, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
-import { THEMES } from '@/lib/themes';
+import { ACCENT_PICKER_ENABLED, THEMES } from '@/lib/themes';
 import { CURRENCIES } from '@/lib/currency';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
@@ -213,7 +213,11 @@ export function SettingsOverview({
     {
       section: 'appearance',
       loading: false,
-      subtitle: `${cap(mode)} mode · ${themeName} accent`,
+      // The accent picker is off while the fixed brand palette is the
+      // single identity, so naming an accent here would be misleading.
+      subtitle: ACCENT_PICKER_ENABLED
+        ? `${cap(mode)} mode · ${themeName} accent`
+        : `${cap(mode)} mode`,
     },
   ];
 

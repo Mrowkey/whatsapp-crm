@@ -410,7 +410,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     items.push({
       id: `broadcast-${b.id}`,
       kind: 'broadcast',
-      text: `Broadcast "${b.name}" ${label}`,
+      text: `Campaign "${b.name}" ${label}`,
       at: b.created_at,
       href: '/broadcasts',
     })

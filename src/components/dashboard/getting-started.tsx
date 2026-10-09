@@ -42,10 +42,10 @@ const STEPS: Step[] = [
   },
   {
     key: 'hasBroadcast',
-    title: 'Send your first broadcast',
+    title: 'Send your first campaign',
     description: 'Reach every contact (or a filtered group) with one message, at once.',
     href: '/broadcasts/new',
-    cta: 'Create Broadcast',
+    cta: 'Create campaign',
   },
   {
     key: 'hasTeammate',

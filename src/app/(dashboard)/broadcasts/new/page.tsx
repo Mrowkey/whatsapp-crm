@@ -84,7 +84,7 @@ export default function NewBroadcastPage() {
    */
   async function handleSaveDraft() {
     if (!template || !name.trim()) {
-      toast.error('Give the broadcast a name before saving a draft.');
+      toast.error('Give the campaign a name before saving a draft.');
       return;
     }
     const supabase = createClient();
@@ -133,9 +133,9 @@ export default function NewBroadcastPage() {
     <div className="mx-auto max-w-3xl space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">New Broadcast</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">New campaign</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Create and send a broadcast message to your contacts.
+          Create and send a campaign to your opted-in contacts.
         </p>
       </div>
 

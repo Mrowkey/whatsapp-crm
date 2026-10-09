@@ -9,6 +9,55 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [Unreleased]
+
+Interface redesign. No migration required, and no change to the
+WhatsApp send, webhook, realtime or automation logic.
+
+### Added
+
+- **Analytics page** (`/analytics`). Message volume, first-response
+  time, campaign delivery / read / reply rates and team workload, with
+  7 / 30 / 90-day ranges. Figures come from live rows only; where there
+  is nothing to measure the page says "No data" instead of a number.
+- **Inbox views.** All / Unread / Mine / Unassigned tabs with live
+  counts, alongside the existing status, tag and company filters.
+- **One-click Resolve / Reopen** in the conversation header.
+- **Customer panel on tablet and mobile**, opened as a slide-over.
+- **WhatsApp connection status** in the top bar, read from the
+  account's saved configuration.
+- Dashboard inbox summary and recent-campaigns cards.
+
+### Changed
+
+- **Light mode is the default**, with white and neutral surfaces and a
+  green accent. Dark mode is still available from the top-bar toggle,
+  and the saved choice is now restored before first paint.
+- Sidebar is grouped (CRM, Engage, Insights). Notifications moved to a
+  bell in the top bar.
+- **"Broadcasts" is labelled "Campaigns"** in the interface. URLs,
+  API routes and table names are unchanged.
+- Campaign delivery and read rates are a share of messages **sent**,
+  not of total recipients, so a half-sent campaign no longer looks
+  like a poor result.
+- Inbox composer, message bubbles, and loading / empty / error /
+  failed-send states were reworked.
+
+### Fixed
+
+- Dashboard message-volume and response-time charts read only the first
+  1,000 rows of a range and undercounted on busy accounts. They now
+  page through the full range.
+- The `dark:` style variant never applied (it keyed off a class that
+  was never set).
+- `/flows`, `/analytics` and `/notifications` are now covered by the
+  server-side sign-in redirect, matching the other app routes.
+
+### Known limits
+
+- Per-agent reply counts and response times are not shown: sent
+  messages are not yet recorded against the agent who sent them.
+
 ## [0.5.0] — 2026-07-02
 
 Adds the **AI reply assistant** — bring-your-own-key. Each account
