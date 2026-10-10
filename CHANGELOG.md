@@ -16,6 +16,9 @@ WhatsApp send, webhook, realtime or automation logic.
 
 ### Added
 
+- **Public landing page** at `/`, introducing the product with links to
+  sign in and sign up. Signed-in visitors are still sent straight to
+  `/dashboard`.
 - **Analytics page** (`/analytics`). Message volume, first-response
   time, campaign delivery / read / reply rates and team workload, with
   7 / 30 / 90-day ranges. Figures come from live rows only; where there

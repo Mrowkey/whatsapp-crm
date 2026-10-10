@@ -98,6 +98,25 @@ describe("middleware — refreshed auth cookies survive redirects", () => {
     expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
   });
 
+  it("sends a signed-in user from the landing page to /dashboard", async () => {
+    mockUser = { id: "user-1" };
+    refreshedCookies = [ROTATED];
+
+    const res = await middleware(new NextRequest("https://app.test/"));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/dashboard");
+    expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
+  });
+
+  it("serves the landing page to a signed-out visitor", async () => {
+    mockUser = null;
+
+    const res = await middleware(new NextRequest("https://app.test/"));
+
+    expect(res.headers.get("location")).toBeNull();
+  });
+
   it("passes through (no redirect) for a signed-in user on a protected page", async () => {
     mockUser = { id: "user-1" };
     refreshedCookies = [ROTATED];

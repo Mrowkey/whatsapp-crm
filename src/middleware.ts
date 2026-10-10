@@ -73,6 +73,14 @@ export async function middleware(request: NextRequest) {
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 
+  // The public landing page lives at `/`; signed-in visitors skip it.
+  if (user && request.nextUrl.pathname === '/') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    url.search = ''
+    return withRefreshedCookies(NextResponse.redirect(url))
+  }
+
   const protectedPaths = [
     '/dashboard',
     '/inbox',
