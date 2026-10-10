@@ -16,6 +16,7 @@
 
 import { NextResponse } from 'next/server';
 import type { RateLimitResult } from '@/lib/rate-limit';
+import { BillingError } from '@/lib/billing/entitlements';
 
 export type ApiErrorCode =
   | 'unauthorized' // missing / malformed / unknown / revoked / expired key
@@ -123,6 +124,14 @@ export function toApiErrorResponse(err: unknown): NextResponse {
     return NextResponse.json(
       { error: { code: err.code, message: err.message } },
       { status: err.status, headers: err.headers }
+    );
+  }
+  if (err instanceof BillingError) {
+    // 402 with the billing code (subscription_inactive / limit_reached
+    // / feature_unavailable) so integrators can branch on it.
+    return NextResponse.json(
+      { error: { code: err.code, message: err.message } },
+      { status: err.status }
     );
   }
   console.error('[api/v1] uncategorized error:', err);

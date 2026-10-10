@@ -13,6 +13,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { getAccountAccess } from '@/lib/billing/guard'
 
 // POST awaits processWebhook inline, within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -790,26 +791,35 @@ async function processMessage(
   // no active flows take the runner's early-exit "no_match" path
   // basically for free (one indexed SELECT for the active run).
   // ============================================================
-  const flowResult = await dispatchInboundToFlows({
-    accountId,
-    userId: configOwnerUserId,
-    contactId: contactRecord.id,
-    conversationId: conversation.id,
-    message:
-      interactiveReplyId
-        ? {
-            kind: 'interactive_reply',
-            reply_id: interactiveReplyId,
-            reply_title: contentText ?? '',
-            meta_message_id: message.id,
-          }
-        : {
-            kind: 'text',
-            text: contentText ?? message.text?.body ?? '',
-            meta_message_id: message.id,
-          },
-    isFirstInboundMessage,
-  })
+  // Billing: a read-only workspace (trial over / subscription ended)
+  // still receives and stores everything above — only the automated
+  // REPLIES below are switched off, the same as manual sending.
+  // `getAccountAccess` never throws and is a no-op when billing isn't
+  // enforced, so this can't break inbound processing.
+  const automatedRepliesAllowed = (await getAccountAccess(accountId)).canWrite
+
+  const flowResult = automatedRepliesAllowed
+    ? await dispatchInboundToFlows({
+        accountId,
+        userId: configOwnerUserId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        message:
+          interactiveReplyId
+            ? {
+                kind: 'interactive_reply',
+                reply_id: interactiveReplyId,
+                reply_title: contentText ?? '',
+                meta_message_id: message.id,
+              }
+            : {
+                kind: 'text',
+                text: contentText ?? message.text?.body ?? '',
+                meta_message_id: message.id,
+              },
+        isFirstInboundMessage,
+      })
+    : { consumed: false }
   const flowConsumed = flowResult.consumed
 
   // Fire any automations that react to this webhook event. All dispatches
@@ -837,6 +847,7 @@ async function processMessage(
   // listens to only one trigger runs only when that trigger matches.
   if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created')
   if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
+  if (!automatedRepliesAllowed) automationTriggers.length = 0
   for (const triggerType of automationTriggers) {
     runAutomationsForTrigger({
       accountId,
@@ -854,7 +865,12 @@ async function processMessage(
   // the account has enabled it. Awaited inside `after()` (same reason as
   // the webhook dispatch below); `dispatchInboundToAiReply` owns its
   // eligibility gates + try/catch and never throws.
-  if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+  if (
+    automatedRepliesAllowed &&
+    !flowConsumed &&
+    !interactiveReplyId &&
+    inboundText.trim()
+  ) {
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,

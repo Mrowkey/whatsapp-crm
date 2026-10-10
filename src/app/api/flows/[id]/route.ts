@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
+import { billingBlock, requireWritable } from '@/lib/billing/guard'
 
 /**
  * GET   /api/flows/[id]  — fetch one flow with its nodes.
@@ -23,6 +24,7 @@ async function requireOwnership(
   | {
       ok: true
       userId: string
+      accountId: string
       supabase: Awaited<ReturnType<typeof createClient>>
     }
   | { ok: false; status: number; body: { error: string } }
@@ -38,13 +40,18 @@ async function requireOwnership(
   // returns null (404 below).
   const { data: flow } = await supabase
     .from('flows')
-    .select('id')
+    .select('id, account_id')
     .eq('id', flowId)
     .maybeSingle()
   if (!flow) {
     return { ok: false, status: 404, body: { error: 'Not found' } }
   }
-  return { ok: true, userId: user.id, supabase }
+  return {
+    ok: true,
+    userId: user.id,
+    accountId: flow.account_id as string,
+    supabase,
+  }
 }
 
 export async function GET(
@@ -93,6 +100,9 @@ export async function PUT(
   const { id } = await context.params
   const guard = await requireOwnership(id)
   if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
+
+  const blocked = await billingBlock(() => requireWritable(guard.accountId))
+  if (blocked) return blocked
 
   const body = (await request.json().catch(() => null)) as PutBody | null
   if (!body) {

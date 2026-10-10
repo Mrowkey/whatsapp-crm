@@ -11,6 +11,7 @@ import {
   isUniqueViolation,
   type ExistingContact,
 } from '@/lib/contacts/dedupe';
+import { createContacts } from '@/lib/contacts/create-contacts';
 import { isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils';
 import {
   Dialog,
@@ -168,20 +169,20 @@ export function ContactForm({
           .eq('id', contactId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
-          .from('contacts')
-          .insert({
-            user_id: user.id,
-            account_id: accountId,
+        // Through the server route (not a direct insert) so the plan's
+        // contact limit is enforced.
+        const { data, error } = await createContacts([
+          {
             name: name.trim() || null,
             phone: phone.trim(),
             email: email.trim() || null,
             company: company.trim() || null,
-          })
-          .select('id')
-          .single();
-        if (error) throw error;
-        contactId = data.id;
+          },
+        ]);
+        // Rethrown as an Error that keeps the Postgres `code`, so the
+        // duplicate handling below still recognises a 23505.
+        if (error) throw Object.assign(new Error(error.message), { code: error.code });
+        contactId = data[0].id;
       }
 
       // Sync tags

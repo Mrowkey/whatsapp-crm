@@ -8,6 +8,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit';
+import { billingErrorResponse, requireWritable } from '@/lib/billing/guard';
 
 /**
  * POST /api/whatsapp/react
@@ -50,6 +51,8 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
+
+    await requireWritable(accountId);
 
     const body = await request.json();
     const { message_id, emoji } = body as {
@@ -184,6 +187,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const billing = billingErrorResponse(error);
+    if (billing) return billing;
     console.error('Error in WhatsApp react POST:', error);
     return NextResponse.json(
       { error: 'Failed to react to message' },

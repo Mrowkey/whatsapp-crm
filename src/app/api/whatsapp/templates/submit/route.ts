@@ -10,6 +10,7 @@ import {
 import { buildMetaTemplatePayload } from '@/lib/whatsapp/template-components'
 import { ensureImageHeaderHandle } from '@/lib/whatsapp/template-header-handle'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
+import { billingErrorResponse, requireWritable } from '@/lib/billing/guard'
 
 /**
  * Shared upsert payload builder — both the Meta-failure path and the
@@ -111,6 +112,8 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
+
+    await requireWritable(accountId)
 
     let payload: TemplatePayload
     try {
@@ -249,6 +252,8 @@ export async function POST(request: Request) {
       dry_run: dryRun,
     })
   } catch (error) {
+    const billing = billingErrorResponse(error)
+    if (billing) return billing
     console.error('Error submitting template:', error)
     return NextResponse.json(
       {

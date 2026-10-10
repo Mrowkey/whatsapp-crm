@@ -29,6 +29,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { AUTH_DISABLED } from "@/lib/auth/mode";
+import { BillingError } from "@/lib/billing/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import { DEMO_ACCOUNT, DEMO_PROFILE, DEMO_USER } from "@/lib/supabase/mock";
 import { hasMinRole, isAccountRole, type AccountRole } from "./roles";
@@ -71,6 +72,13 @@ export class ForbiddenError extends Error {
 export function toErrorResponse(err: unknown): NextResponse {
   if (err instanceof UnauthorizedError || err instanceof ForbiddenError) {
     return NextResponse.json({ error: err.message }, { status: err.status });
+  }
+  if (err instanceof BillingError) {
+    // 402 — the plan, not the caller's role, is what's in the way.
+    return NextResponse.json(
+      { error: err.message, code: err.code, ...err.details },
+      { status: err.status },
+    );
   }
   console.error("[toErrorResponse] uncategorized error:", err);
   return NextResponse.json({ error: "Internal server error" }, { status: 500 });

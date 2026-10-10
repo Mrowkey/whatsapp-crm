@@ -11,8 +11,69 @@ and polish.
 
 ## [Unreleased]
 
-Interface redesign. No migration required, and no change to the
-WhatsApp send, webhook, realtime or automation logic.
+Interface redesign and subscriptions. The redesign needs no migration
+and does not change the WhatsApp send, webhook, realtime or automation
+logic. Subscriptions do — see below.
+
+### Added — subscriptions (**migration required**: `034_subscriptions.sql`)
+
+Billing is per account (workspace). It is **off until
+`STRIPE_SECRET_KEY` is set**: with no payment provider configured
+nothing is limited and nobody is locked out, so existing deployments
+behave as before. Apply the migration before setting the key.
+
+- **Plans**: a 14-day free trial (created automatically for new
+  accounts, and for existing accounts when the migration is applied),
+  Starter and Growth. Prices and limits are placeholders in
+  `src/lib/billing/plans.ts`; the amount charged is whatever the Stripe
+  price behind `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_GROWTH` says.
+
+  | | Free trial | Starter | Growth |
+  | --- | --- | --- | --- |
+  | Team seats (members + pending invitations) | 3 | 3 | 10 |
+  | Contacts | 1,000 | 5,000 | 50,000 |
+  | Campaign recipients per month | 1,000 | 10,000 | 100,000 |
+  | Automations | 5 | 10 | Unlimited |
+  | Flows | 3 | 5 | Unlimited |
+  | Public API | Yes | No | Yes |
+
+- **Settings → Billing** (owners and admins): current plan and status,
+  usage against each limit, checkout for a new subscription and the
+  Stripe billing portal for changing plan, card or canceling.
+- **Stripe Checkout, Customer Portal and a signature-verified webhook**
+  at `/api/billing/webhook` that keeps the account's plan in sync.
+  Redelivered and out-of-order events are handled safely. Stripe sits
+  behind a small provider interface (`src/lib/billing/provider.ts`).
+- **Limits are enforced on the server.** A request over a limit gets
+  HTTP 402 with a message saying which limit and where to upgrade:
+  inviting members, creating or importing contacts, sending campaigns,
+  creating automations and flows, and the public API.
+- **Read-only when the trial ends or a subscription is canceled.**
+  Everything stays viewable; sending, creating, and automated replies
+  (flows, automations, AI auto-reply) stop, and a banner explains why.
+  Inbound WhatsApp messages are still received and stored. A failed
+  payment keeps the workspace working while Stripe retries, with a
+  warning banner.
+- New env vars, all optional: `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`,
+  `STRIPE_PRICE_GROWTH` (see `.env.local.example`).
+
+### Changed — subscriptions
+
+- Creating and importing contacts from the dashboard now goes through
+  `POST /api/contacts` instead of writing to the database from the
+  browser, so the contact limit can be enforced.
+- Public API: requests can now fail with `402` (`feature_unavailable`,
+  `subscription_inactive`, `limit_reached`) — see `docs/public-api.md`.
+
+### Known limits — subscriptions
+
+- Limits are enforced in the app's server routes, not in the database.
+  Campaign drafts are still saved straight from the browser; the send
+  itself is what is metered and blocked.
+- Automation steps already waiting on a timer when a workspace becomes
+  read-only still run.
+- Campaign usage is counted from the moment billing is switched on.
 
 ### Added
 

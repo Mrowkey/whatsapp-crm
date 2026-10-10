@@ -10,6 +10,7 @@ import {
   validateSendMessageParams,
   SendMessageError,
 } from '@/lib/whatsapp/send-message'
+import { billingErrorResponse, requireWritable } from '@/lib/billing/guard'
 
 // The dashboard's outbound-send endpoint. It owns auth, per-user rate
 // limiting, and the two ways the UI targets a thread — an existing
@@ -59,6 +60,9 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
+
+    // Read-only workspace (trial over / subscription ended) → 402.
+    await requireWritable(accountId)
 
     const body = await request.json()
     const {
@@ -198,6 +202,8 @@ export async function POST(request: Request) {
       throw err
     }
   } catch (error) {
+    const billing = billingErrorResponse(error)
+    if (billing) return billing
     console.error('Error in WhatsApp send POST:', error)
     return NextResponse.json(
       { error: 'Failed to send message' },

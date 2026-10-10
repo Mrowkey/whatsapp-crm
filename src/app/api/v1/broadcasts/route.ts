@@ -42,6 +42,7 @@ import {
   deliverBroadcast,
   BroadcastError,
 } from '@/lib/whatsapp/broadcast-core';
+import { recordCampaignSends, requireWithinLimit } from '@/lib/billing/guard';
 
 export async function POST(request: Request) {
   try {
@@ -58,6 +59,15 @@ export async function POST(request: Request) {
     const templateName =
       typeof body.template_name === 'string' ? body.template_name : '';
     const recipients = Array.isArray(body.recipients) ? body.recipients : [];
+
+    // Monthly campaign allowance — the whole request must fit.
+    if (recipients.length > 0) {
+      await requireWithinLimit(
+        ctx.accountId,
+        'broadcastRecipientsPerMonth',
+        recipients.length
+      );
+    }
 
     const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId);
 
@@ -77,7 +87,10 @@ export async function POST(request: Request) {
     // Fan out after the response is sent. Uses the same service-role
     // client — no request-scoped auth needed for the Meta calls or
     // the account-scoped row updates.
-    after(() => deliverBroadcast(ctx.supabase, plan));
+    after(async () => {
+      const sent = await deliverBroadcast(ctx.supabase, plan);
+      await recordCampaignSends(ctx.accountId, sent);
+    });
 
     return ok(
       {

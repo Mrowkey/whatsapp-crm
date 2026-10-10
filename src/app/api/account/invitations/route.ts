@@ -27,6 +27,7 @@ import {
   inviteUrl,
 } from "@/lib/auth/invitations";
 import { isAccountRole } from "@/lib/auth/roles";
+import { requireWithinLimit } from "@/lib/billing/guard";
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -213,6 +214,10 @@ export async function POST(request: Request) {
       }
       label = trimmed === "" ? null : trimmed;
     }
+
+    // Seats = members + pending invitations (see countUsage). Checked
+    // after validation so a malformed request 400s rather than 402s.
+    await requireWithinLimit(ctx.accountId, "seats");
 
     const { token, hash } = generateInviteToken();
 

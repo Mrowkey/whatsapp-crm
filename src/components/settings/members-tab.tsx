@@ -74,6 +74,8 @@ import {
 import { InviteMemberDialog } from './invite-member-dialog';
 import { SettingsPanelHead } from './settings-panel-head';
 import { ROLE_META } from './role-meta';
+import { PlanLimitHint } from '@/components/billing/plan-limit-hint';
+import { useBilling } from '@/hooks/use-billing';
 
 interface Member {
   user_id: string;
@@ -127,6 +129,7 @@ function fmtExpiresIn(iso: string): string {
 export function MembersTab() {
   const { user, canManageMembers } = useAuth();
   const { getPresence, getRow, now } = usePresence();
+  const { refresh: refreshBilling } = useBilling();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -292,6 +295,8 @@ export function MembersTab() {
           </RequireRole>
         }
       />
+
+      <PlanLimitHint limit="seats" />
 
       {/* Live presence summary across the roster. Updates without a
           full refresh as heartbeats and the local re-derive tick land. */}
@@ -568,7 +573,11 @@ export function MembersTab() {
       <InviteMemberDialog
         open={inviteOpen}
         onOpenChange={setInviteOpen}
-        onCreated={loadEverything}
+        onCreated={() => {
+          void loadEverything();
+          // A new invitation takes a seat — keep the seat hint current.
+          void refreshBilling();
+        }}
       />
 
       <Dialog

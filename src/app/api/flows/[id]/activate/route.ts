@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 import { validateFlowForActivation } from '@/lib/flows/validate'
+import { billingBlock, requireWritable } from '@/lib/billing/guard'
 
 /**
  * POST /api/flows/[id]/activate
@@ -45,11 +46,20 @@ export async function POST(
   // Ownership via RLS — caller's client.
   const { data: existing } = await supabase
     .from('flows')
-    .select('id')
+    .select('id, account_id')
     .eq('id', id)
     .maybeSingle()
   if (!existing) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  // Pausing or archiving is always allowed; switching a flow on is not
+  // when the workspace is read-only.
+  if (status === 'active') {
+    const blocked = await billingBlock(() =>
+      requireWritable(existing.account_id as string),
+    )
+    if (blocked) return blocked
   }
 
   const admin = supabaseAdmin()

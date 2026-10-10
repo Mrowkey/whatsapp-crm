@@ -1,5 +1,6 @@
 import {
   Coins,
+  CreditCard,
   FileText,
   KeyRound,
   LayoutGrid,
@@ -33,6 +34,7 @@ export const SETTINGS_SECTIONS = [
   'members',
   'ai',
   'api',
+  'billing',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -45,6 +47,7 @@ export interface SectionMeta {
   label: string;
   icon: LucideIcon;
   group: 'top' | 'account' | 'workspace';
+  adminOnly?: boolean;
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
@@ -59,6 +62,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
   ai: { id: 'ai', label: 'AI Assistant', icon: Sparkles, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
+  billing: { id: 'billing', label: 'Billing', icon: CreditCard, group: 'workspace', adminOnly: true },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [

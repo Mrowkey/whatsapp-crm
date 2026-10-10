@@ -250,7 +250,8 @@ export async function createBroadcast(
  * Fan out a {@link BroadcastPlan}: send each recipient's template
  * (phone-variant retry) and stamp its `broadcast_recipients` row.
  * Best-effort per recipient — one failure never aborts the rest.
- * Designed to run inside `after()`.
+ * Designed to run inside `after()`. Resolves to the number of
+ * messages Meta accepted (what counts toward the plan's allowance).
  *
  * The per-status count columns on `broadcasts` are owned by the DB
  * aggregate trigger (migrations 003/005): each recipient-row update
@@ -262,7 +263,7 @@ export async function createBroadcast(
 export async function deliverBroadcast(
   db: SupabaseClient,
   plan: BroadcastPlan
-): Promise<void> {
+): Promise<number> {
   let sentCount = 0;
 
   for (const recipient of plan.planned) {
@@ -324,4 +325,6 @@ export async function deliverBroadcast(
       updated_at: new Date().toISOString(),
     })
     .eq('id', plan.broadcastId);
+
+  return sentCount;
 }

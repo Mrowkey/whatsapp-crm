@@ -7,6 +7,7 @@ import {
   validateStepsForActivation,
   validateTriggerForActivation,
 } from '@/lib/automations/validate'
+import { billingBlock, requireWithinLimit } from '@/lib/billing/guard'
 
 export async function GET() {
   const supabase = await createClient()
@@ -45,6 +46,9 @@ export async function POST(request: Request) {
       { status: 403 },
     )
   }
+
+  const blocked = await billingBlock(() => requireWithinLimit(accountId, 'automations'))
+  if (blocked) return blocked
 
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })

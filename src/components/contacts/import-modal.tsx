@@ -8,6 +8,7 @@ import {
   isUniqueViolation,
   normalizeKey,
 } from '@/lib/contacts/dedupe';
+import { createContacts, isBillingBlock } from '@/lib/contacts/create-contacts';
 import {
   parseContactCsv,
   type ParsedContactRow,
@@ -315,13 +316,15 @@ export function ImportModal({
       // 4) Batch insert the genuinely-new rows in chunks of 50. The DB
       //    unique index is the backstop: a 23505 (race, or a format
       //    that normalizes equal) counts as skipped, not failed.
+      //    Inserts go through the server route so the plan's contact
+      //    limit is enforced; once it refuses, the rest of the file is
+      //    left unimported rather than retried row by row.
       const chunkSize = 50;
+      let planBlockMessage: string | null = null;
 
       for (let i = 0; i < toInsert.length; i += chunkSize) {
         const chunk = toInsert.slice(i, i + chunkSize);
         const rows = chunk.map((row) => ({
-          user_id: user.id,
-          account_id: accountId,
           phone: row.phone,
           name: row.name || null,
           email: row.email || null,
@@ -329,10 +332,13 @@ export function ImportModal({
           opted_in: consentConfirmed,
         }));
 
-        const { data, error } = await supabase
-          .from('contacts')
-          .insert(rows)
-          .select('id');
+        const { data, error } = await createContacts(rows);
+
+        if (isBillingBlock(error)) {
+          planBlockMessage = error!.message;
+          failed += toInsert.length - i;
+          break;
+        }
 
         if (error) {
           // Retry individually so one bad/duplicate row doesn't sink
@@ -340,11 +346,10 @@ export function ImportModal({
           for (let j = 0; j < rows.length; j++) {
             const row = rows[j];
             const source = chunk[j];
-            const { data: singleData, error: singleErr } = await supabase
-              .from('contacts')
-              .insert(row)
-              .select('id')
-              .single();
+            const { data: singleRows, error: singleErr } = await createContacts([
+              row,
+            ]);
+            const singleData = singleRows?.[0];
 
             if (!singleErr && singleData) {
               imported++;
@@ -418,9 +423,14 @@ export function ImportModal({
           `${invalidPhone} row${invalidPhone !== 1 ? 's' : ''} skipped — phone number wasn't valid`
         );
       }
+      if (planBlockMessage) {
+        toast.error(planBlockMessage, { duration: 10000 });
+      }
       if (failed > 0) {
         toast.error(
-          `${failed} contact${failed !== 1 ? 's' : ''} failed to import`
+          planBlockMessage
+            ? `${failed} contact${failed !== 1 ? 's' : ''} not imported`
+            : `${failed} contact${failed !== 1 ? 's' : ''} failed to import`
         );
       }
     } catch (err: unknown) {

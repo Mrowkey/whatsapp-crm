@@ -10,6 +10,7 @@ import {
   validateStepsForActivation,
   validateTriggerForActivation,
 } from '@/lib/automations/validate'
+import { billingBlock, requireWritable } from '@/lib/billing/guard'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -59,11 +60,22 @@ export async function PATCH(
   // to compute the post-patch "effective" state for validation.
   const { data: existing } = await admin
     .from('automations')
-    .select('id, user_id, is_active, trigger_type, trigger_config')
+    .select('id, user_id, account_id, is_active, trigger_type, trigger_config')
     .eq('id', id)
     .maybeSingle()
   if (!existing || existing.user_id !== user.id) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  // A read-only workspace can still switch an automation off — that's
+  // the one edit that never sends anything.
+  const onlyPausing =
+    body.is_active === false && Object.keys(body).length === 1
+  if (!onlyPausing) {
+    const blocked = await billingBlock(() =>
+      requireWritable(existing.account_id as string),
+    )
+    if (blocked) return blocked
   }
 
   const update: Record<string, unknown> = {}

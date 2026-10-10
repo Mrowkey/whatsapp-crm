@@ -74,6 +74,9 @@ may be reworded.
 | 401    | `unauthorized` | Missing / malformed / unknown / revoked / expired key |
 | 403    | `forbidden`    | Valid key, but missing the required scope        |
 | 429    | `rate_limited` | Per-key rate limit exceeded                      |
+| 402    | `feature_unavailable` | The account's plan does not include the API |
+| 402    | `subscription_inactive` | Trial ended or subscription canceled: reads still work, writes are refused |
+| 402    | `limit_reached` | A plan limit (contacts, monthly campaign recipients) would be exceeded |
 | 400    | `bad_request`  | Malformed input                                  |
 | 404    | `not_found`    | No such resource                                 |
 | 500    | `internal`     | Server error                                     |

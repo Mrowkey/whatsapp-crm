@@ -7,6 +7,8 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { AUTH_DISABLED } from "@/lib/auth/mode";
+import { BillingProvider } from "@/hooks/use-billing";
+import { BillingBanner } from "@/components/billing/billing-banner";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -49,6 +51,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
+        {/* Read-only / payment-failed / trial-ending notice. Renders
+            nothing unless one of those applies. */}
+        <BillingBanner />
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
@@ -59,7 +64,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <DashboardShellInner>{children}</DashboardShellInner>
+      {/* One plan/usage load shared by the banner, Settings → Billing
+          and the inline limit hints. */}
+      <BillingProvider>
+        <DashboardShellInner>{children}</DashboardShellInner>
+      </BillingProvider>
     </AuthProvider>
   );
 }

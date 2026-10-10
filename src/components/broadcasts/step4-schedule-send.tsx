@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
+import { PlanLimitHint } from '@/components/billing/plan-limit-hint';
 
 interface AudienceConfig {
   type: string;
@@ -181,6 +182,14 @@ export function Step4ScheduleSend({
           </div>
         </div>
       </div>
+
+      {/* Plan allowance — warns before the send is refused server-side. */}
+      {!loadingReach && estimatedReach > 0 ? (
+        <PlanLimitHint
+          limit="broadcastRecipientsPerMonth"
+          adding={estimatedReach}
+        />
+      ) : null}
 
       {/* Processing overlay */}
       {isProcessing && (

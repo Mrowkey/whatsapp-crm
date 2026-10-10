@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 import { getFlowTemplate } from '@/lib/flows/templates'
+import { billingBlock, requireWithinLimit } from '@/lib/billing/guard'
 
 /**
  * GET /api/flows — list the caller's flows.
@@ -66,6 +67,9 @@ export async function POST(request: Request) {
       { status: 403 },
     )
   }
+
+  const blocked = await billingBlock(() => requireWithinLimit(accountId, 'flows'))
+  if (blocked) return blocked
 
   const body = (await request.json().catch(() => null)) as
     | {

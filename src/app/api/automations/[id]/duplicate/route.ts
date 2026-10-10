@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { billingBlock, requireWithinLimit } from '@/lib/billing/guard'
 
 export async function POST(
   _request: Request,
@@ -22,6 +23,11 @@ export async function POST(
     .maybeSingle()
   if (origErr) return NextResponse.json({ error: origErr.message }, { status: 500 })
   if (!original) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const blocked = await billingBlock(() =>
+    requireWithinLimit(original.account_id as string, 'automations'),
+  )
+  if (blocked) return blocked
 
   const { data: copy, error: copyErr } = await admin
     .from('automations')

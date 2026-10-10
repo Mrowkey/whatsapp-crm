@@ -17,6 +17,9 @@ import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AiConfig } from '@/components/settings/ai-config';
+import { BillingPanel } from '@/components/settings/billing-panel';
+import { useBilling } from '@/hooks/use-billing';
+import { PLANS } from '@/lib/billing/plans';
 import {
   resolveSection,
   type SettingsSection,
@@ -25,7 +28,8 @@ import {
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, canEditSettings } = useAuth();
+  const { billing } = useBilling();
   const { mode } = useTheme();
 
   // The URL (`?tab=`) is the single source of truth for the active
@@ -47,8 +51,9 @@ export default function SettingsPage() {
     () => ({
       appearance: mode.charAt(0).toUpperCase() + mode.slice(1),
       deals: defaultCurrency,
+      billing: billing?.enforced ? PLANS[billing.plan].name : undefined,
     }),
-    [mode, defaultCurrency],
+    [mode, defaultCurrency, billing],
   );
 
   const panel: Record<SettingsSection, ReactNode> = {
@@ -63,6 +68,7 @@ export default function SettingsPage() {
     members: <MembersTab />,
     ai: <AiConfig />,
     api: <ApiKeysSettings />,
+    billing: <BillingPanel />,
   };
 
   return (
@@ -78,7 +84,12 @@ export default function SettingsPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
-        <SettingsRail active={section} onSelect={go} hints={hints} />
+        <SettingsRail
+          active={section}
+          onSelect={go}
+          hints={hints}
+          isAdmin={canEditSettings}
+        />
         <div className="min-w-0">{panel[section]}</div>
       </div>
     </div>

@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import { requireWithinLimit } from '@/lib/billing/guard';
 
 /** Row select that embeds the contact's tags for serialization. */
 export const CONTACT_SELECT = '*, contact_tags(tags(*))';
@@ -122,6 +123,9 @@ export async function findOrCreateContact(
 
   const existing = await findExistingContact(db, accountId, sanitized);
   if (existing) return { id: existing.id, created: false };
+
+  // Only a genuinely new contact counts against the plan.
+  await requireWithinLimit(accountId, 'contacts');
 
   const { data: created, error } = await db
     .from('contacts')

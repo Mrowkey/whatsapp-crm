@@ -35,6 +35,7 @@ import { hashApiKey, looksLikeApiKey } from '@/lib/api-keys/keys';
 import { hasScope, type ApiScope } from '@/lib/api-keys/scopes';
 import { forbidden, rateLimited, unauthorized } from '@/lib/api/v1/respond';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { requireFeature, requireWritable } from '@/lib/billing/guard';
 
 export interface ApiKeyContext {
   /** Discriminant — lets shared logic tell key auth from cookie auth. */
@@ -73,6 +74,9 @@ function extractKey(request: Request): string | null {
  *   401 unauthorized — no key, malformed, unknown, revoked, expired
  *   403 forbidden    — valid key without the required scope
  *   429 rate_limited — per-key budget exhausted
+ *   402 (BillingError) — the account's plan doesn't include the API,
+ *                        or the workspace is read-only and this is a
+ *                        write (any method other than GET/HEAD)
  *
  * On success, bumps `last_used_at` (fire-and-forget) and returns the
  * account context.
@@ -103,6 +107,13 @@ export async function requireApiKey(
 
   if (scope && !hasScope(row.scopes, scope)) {
     throw forbidden(`This API key is missing the '${scope}' scope`);
+  }
+
+  // Plan gate. Reads stay available to a read-only workspace whose
+  // plan includes the API; anything that sends or creates does not.
+  await requireFeature(row.account_id, 'apiAccess');
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    await requireWritable(row.account_id);
   }
 
   touchLastUsed(row.id);

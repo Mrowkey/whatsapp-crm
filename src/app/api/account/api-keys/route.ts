@@ -31,6 +31,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit';
+import { requireFeature, requireWritable } from '@/lib/billing/guard';
 
 const MAX_NAME_LEN = 80;
 // Hard ceiling on caller-supplied expiry (1 year), mirroring the
@@ -77,6 +78,9 @@ export async function POST(request: Request) {
       RATE_LIMITS.adminAction
     );
     if (!limit.success) return rateLimitResponse(limit);
+
+    await requireFeature(ctx.accountId, 'apiAccess');
+    await requireWritable(ctx.accountId);
 
     const body = (await request.json().catch(() => null)) as {
       name?: unknown;

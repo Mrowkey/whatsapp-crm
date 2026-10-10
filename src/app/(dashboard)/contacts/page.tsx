@@ -56,6 +56,7 @@ import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { PlanLimitHint } from '@/components/billing/plan-limit-hint';
 
 const PAGE_SIZE = 25;
 
@@ -444,6 +445,7 @@ export default function ContactsPage() {
           <p className="text-sm text-muted-foreground mt-1">
             Manage your contact list. {totalCount > 0 && `${totalCount} total contacts.`}
           </p>
+          <PlanLimitHint limit="contacts" className="mt-1" />
         </div>
         <div className="flex items-center gap-2">
           {canEditSettings && (

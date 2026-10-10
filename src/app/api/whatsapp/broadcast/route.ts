@@ -15,6 +15,11 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import {
+  billingErrorResponse,
+  recordCampaignSends,
+  requireWithinLimit,
+} from '@/lib/billing/guard'
 
 interface BroadcastResult {
   phone: string
@@ -175,6 +180,15 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+
+    // Monthly campaign allowance. The whole batch must fit: a batch
+    // that would cross the limit is refused outright rather than
+    // partially sent, so the caller gets one clear 402.
+    await requireWithinLimit(
+      accountId,
+      'broadcastRecipientsPerMonth',
+      recipients.length,
+    )
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
@@ -372,6 +386,9 @@ export async function POST(request: Request) {
       }
     }
 
+    // Only messages Meta accepted count toward the allowance.
+    await recordCampaignSends(accountId, sentCount)
+
     return NextResponse.json({
       success: true,
       total: recipients.length,
@@ -380,6 +397,8 @@ export async function POST(request: Request) {
       results,
     })
   } catch (error) {
+    const billing = billingErrorResponse(error)
+    if (billing) return billing
     console.error('Error in WhatsApp broadcast POST:', error)
     return NextResponse.json(
       { error: 'Failed to process broadcast' },
