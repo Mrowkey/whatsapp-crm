@@ -54,6 +54,12 @@ export type SubscriptionUpdate =
       kind: 'payment_failed';
       customerId: string | null;
       subscriptionId: string | null;
+    }
+  | {
+      /** An invoice was paid — clears a payment-failed (past due) state. */
+      kind: 'payment_succeeded';
+      customerId: string | null;
+      subscriptionId: string | null;
     };
 
 /** The webhook payload failed signature verification or was malformed. */

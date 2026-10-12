@@ -246,6 +246,18 @@ describe('stripe provider parseWebhook', () => {
     ).toMatchObject({ subscriptionId: 'sub_2' });
   });
 
+  it.each(['invoice.paid', 'invoice.payment_succeeded'])(
+    'normalises %s as a successful payment',
+    async (type) => {
+      const body = event(type, { customer: 'cus_1', subscription: 'sub_1' });
+      expect((await provider.parseWebhook(body, headersFor(body))).update).toEqual({
+        kind: 'payment_succeeded',
+        customerId: 'cus_1',
+        subscriptionId: 'sub_1',
+      });
+    },
+  );
+
   it('passes through unhandled event types with no update', async () => {
     const body = event('customer.created', { id: 'cus_1' });
     const parsed = await provider.parseWebhook(body, headersFor(body));

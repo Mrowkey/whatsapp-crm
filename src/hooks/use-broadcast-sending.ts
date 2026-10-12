@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Contact, MessageTemplate } from '@/types';
+import { createContacts, isBillingBlock } from '@/lib/contacts/create-contacts';
+import { assertCampaignAllowed } from '@/lib/billing/preflight';
 
 export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 
@@ -276,7 +278,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     const { data: existing, error: lookupErr } = await supabase
       .from('contacts')
       .select('*')
-      .eq('user_id', user.id)
+      // Account-wide, not "contacts I created": a number a teammate
+      // already added must be reused, not re-inserted (which the phone
+      // unique index would reject, failing the whole campaign).
+      .eq('account_id', accountId)
       .in('phone', phones);
     if (lookupErr) {
       throw new Error(`Failed to look up CSV contacts: ${lookupErr.message}`);
@@ -287,29 +292,32 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       if (c.phone) byPhone.set(c.phone, c);
     }
 
-    // Insert only missing contacts, in one batch per 200 rows (PostgREST
-    // has a default payload cap — 200 keeps individual requests small).
+    // Insert only missing contacts, through the server route (not a
+    // direct insert) so the plan's contact limit applies to a CSV
+    // audience the same way it does to the Contacts page. 100 per
+    // request is the route's cap.
     const missing = phones
       .filter((p) => !byPhone.has(p))
       .map((phone) => ({
-        user_id: user.id,
-        account_id: accountId,
         phone,
         name: uniqueByPhone.get(phone)?.name ?? null,
         opted_in: consentConfirmed,
       }));
 
-    const INSERT_CHUNK = 200;
+    const INSERT_CHUNK = 100;
     for (let i = 0; i < missing.length; i += INSERT_CHUNK) {
       const chunk = missing.slice(i, i + INSERT_CHUNK);
-      const { data: inserted, error: insertErr } = await supabase
-        .from('contacts')
-        .insert(chunk)
-        .select();
+      const { data: inserted, error: insertErr } = await createContacts(chunk);
       if (insertErr) {
-        throw new Error(`Failed to create CSV contacts: ${insertErr.message}`);
+        // A plan refusal already reads as a full sentence; anything
+        // else gets the context prefix.
+        throw new Error(
+          isBillingBlock(insertErr)
+            ? insertErr.message
+            : `Failed to create CSV contacts: ${insertErr.message}`,
+        );
       }
-      for (const c of (inserted ?? []) as Contact[]) {
+      for (const c of inserted as unknown as Contact[]) {
         if (c.phone) byPhone.set(c.phone, c);
       }
     }
@@ -384,6 +392,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       if (contacts.length === 0) {
         throw new Error('No contacts found for this audience.');
       }
+
+      // Stop here — before tagging anyone or writing the campaign — if
+      // the plan would refuse the send. The route enforces regardless.
+      await assertCampaignAllowed(contacts.length);
 
       // ── Step 1b: Apply the partition tag, if one was chosen ───────
       // Done before any sending starts so it lands even if the send
@@ -513,6 +525,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
 
       let failedCount = 0;
       const totalRecipients = recipients.length;
+      let planBlock: string | null = null;
 
       // Media-header templates (image/video/document) require a media
       // URL on every send. Collected in the personalize step and applied
@@ -552,6 +565,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         if (apiRecipients.length === 0) continue;
 
         try {
+          if (planBlock) throw new Error(planBlock);
           const res = await fetch('/api/whatsapp/broadcast', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -564,6 +578,12 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
 
           const data = await res.json();
 
+          if (res.status === 402) {
+            // The plan refused (allowance used up mid-campaign, or the
+            // workspace went read-only). Every later batch would be
+            // refused too — remember why and skip the calls.
+            planBlock = data.error || 'Your plan does not allow this send.';
+          }
           if (!res.ok) {
             throw new Error(data.error || 'Broadcast API request failed');
           }
@@ -627,7 +647,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           30 + Math.round(((i + batch.length) / totalRecipients) * 60);
         setProgress(progressPct);
 
-        if (i + SEND_BATCH_SIZE < recipients.length) {
+        // No pacing needed once the plan has refused: nothing is sent.
+        if (!planBlock && i + SEND_BATCH_SIZE < recipients.length) {
           await sleep(SEND_BATCH_DELAY_MS);
         }
       }

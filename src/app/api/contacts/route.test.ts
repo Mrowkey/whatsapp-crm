@@ -133,6 +133,25 @@ describe("POST /api/contacts", () => {
     expect(requireWithinLimit).not.toHaveBeenCalled();
   });
 
+  it("returns the full created rows, for callers that need more than the id", async () => {
+    insertResult = {
+      data: [{ id: "c-1", phone: "+14155550123", name: "Jane", opted_in: true }],
+      error: null,
+    };
+    const res = await POST(post({ contacts: [{ phone: "+14155550123", name: "Jane" }] }));
+    expect(await res.json()).toEqual({
+      contacts: [{ id: "c-1", phone: "+14155550123", name: "Jane", opted_in: true }],
+    });
+  });
+
+  it("rejects an over-long field without inserting", async () => {
+    const res = await POST(
+      post({ contacts: [{ phone: "+14155550123", name: "x".repeat(201) }] }),
+    );
+    expect(res.status).toBe(400);
+    expect(inserted).toHaveLength(0);
+  });
+
   it("passes a duplicate phone back as a 409 with the Postgres code", async () => {
     insertResult = { data: null, error: { code: "23505", message: "duplicate" } };
     const res = await POST(post({ contacts: [{ phone: "+14155550123" }] }));

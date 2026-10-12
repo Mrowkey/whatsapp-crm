@@ -48,6 +48,8 @@ behave as before. Apply the migration before setting the key.
   HTTP 402 with a message saying which limit and where to upgrade:
   inviting members, creating or importing contacts, sending campaigns,
   creating automations and flows, and the public API.
+- A campaign the plan would refuse is stopped before anything is
+  written, with the number of recipients left this month.
 - **Read-only when the trial ends or a subscription is canceled.**
   Everything stays viewable; sending, creating, and automated replies
   (flows, automations, AI auto-reply) stop, and a banner explains why.
@@ -62,17 +64,28 @@ behave as before. Apply the migration before setting the key.
 
 - Creating and importing contacts from the dashboard now goes through
   `POST /api/contacts` instead of writing to the database from the
-  browser, so the contact limit can be enforced.
+  browser, so the contact limit can be enforced. This includes contacts
+  created from a campaign's CSV audience.
 - Public API: requests can now fail with `402` (`feature_unavailable`,
   `subscription_inactive`, `limit_reached`) — see `docs/public-api.md`.
+
+### Fixed — campaigns
+
+- A CSV campaign audience containing a number a teammate had already
+  added failed with a duplicate error. Existing contacts are now
+  matched across the whole account, not just the sender's own.
+- Creating a flow that the server refused showed a generic "Couldn't
+  create flow." It now shows the reason.
 
 ### Known limits — subscriptions
 
 - Limits are enforced in the app's server routes, not in the database.
   Campaign drafts are still saved straight from the browser; the send
   itself is what is metered and blocked.
-- Automation steps already waiting on a timer when a workspace becomes
-  read-only still run.
+- Automation steps waiting on a timer when a workspace becomes
+  read-only are cancelled, not resumed after an upgrade.
+- Two requests arriving at the same instant can each pass a limit
+  check, so a limit can be overshot by a few rows under concurrency.
 - Campaign usage is counted from the moment billing is switched on.
 
 ### Added

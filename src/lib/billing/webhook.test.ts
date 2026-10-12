@@ -357,6 +357,56 @@ describe('handleBillingEvent', () => {
     });
   });
 
+  describe('invoice paid', () => {
+    const paid = (id: string, subscriptionId: string | null, at: Date): BillingEvent => ({
+      provider: 'stripe',
+      id,
+      type: 'invoice.paid',
+      createdAt: at,
+      update: { kind: 'payment_succeeded', customerId: 'cus_1', subscriptionId },
+    });
+
+    it('lifts a past-due subscription back to active', async () => {
+      const { db, tables, sub } = makeDb();
+      tables.account_subscriptions.push(trialRow());
+      await handleBillingEvent(db, subEvent('evt_1', { status: 'past_due' }));
+
+      const outcome = await handleBillingEvent(db, paid('evt_2', 'sub_1', later(1)));
+
+      expect(outcome).toBe('applied');
+      expect(sub()).toMatchObject({ status: 'active', plan: 'starter' });
+    });
+
+    it('does not reactivate a canceled subscription', async () => {
+      const { db, tables, sub } = makeDb();
+      tables.account_subscriptions.push(trialRow());
+      await handleBillingEvent(db, subEvent('evt_1', { status: 'canceled' }));
+
+      expect(await handleBillingEvent(db, paid('evt_2', 'sub_1', later(1)))).toBe('ignored');
+      expect(sub().status).toBe('canceled');
+    });
+
+    it('does not turn a trial into a paid plan', async () => {
+      const { db, tables, sub } = makeDb();
+      tables.account_subscriptions.push(trialRow());
+
+      expect(await handleBillingEvent(db, paid('evt_1', null, T0))).toBe('ignored');
+      expect(sub()).toMatchObject({ plan: 'trial', status: 'trialing' });
+    });
+
+    it("ignores a payment for a subscription the account isn't tracking", async () => {
+      const { db, tables, sub } = makeDb();
+      tables.account_subscriptions.push(trialRow());
+      await handleBillingEvent(db, subEvent('evt_1', { status: 'past_due' }));
+
+      // Found by customer id, but it's a different subscription's invoice.
+      expect(await handleBillingEvent(db, paid('evt_2', 'sub_other', later(1)))).toBe(
+        'ignored',
+      );
+      expect(sub().status).toBe('past_due');
+    });
+  });
+
   it('ignores event types that carry no update, but still records them', async () => {
     const { db, tables } = makeDb();
     const outcome = await handleBillingEvent(db, {

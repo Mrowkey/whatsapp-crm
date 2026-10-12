@@ -16,6 +16,9 @@ export interface NewContactInput {
   opted_in?: boolean;
 }
 
+/** A created contact row. Always has `id`; the rest is the full row. */
+export type CreatedContact = { id: string } & Record<string, unknown>;
+
 export interface CreateContactsError {
   message: string;
   code: string;
@@ -25,7 +28,7 @@ export interface CreateContactsError {
 export async function createContacts(
   contacts: NewContactInput[],
 ): Promise<
-  | { data: { id: string }[]; error: null }
+  | { data: CreatedContact[]; error: null }
   | { data: null; error: CreateContactsError }
 > {
   try {
@@ -35,7 +38,7 @@ export async function createContacts(
       body: JSON.stringify({ contacts }),
     });
     const payload = (await res.json().catch(() => ({}))) as {
-      contacts?: { id: string }[];
+      contacts?: CreatedContact[];
       error?: string;
       code?: string;
     };

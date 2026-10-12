@@ -22,8 +22,13 @@ import type { BillingSummary } from "@/lib/billing/summary";
 export async function GET() {
   try {
     const ctx = await getCurrentAccount();
-    const db = supabaseAdmin();
     const enforced = isBillingEnforced();
+    // Usage must be counted account-wide, which needs the service role
+    // (an agent can't see pending invitations under RLS). When billing
+    // isn't enforced the numbers are informational, so the caller's own
+    // client will do — and a deployment that never set billing up isn't
+    // made to depend on the service-role key for every page load.
+    const db = enforced ? supabaseAdmin() : ctx.supabase;
 
     const [sub, usage] = await Promise.all([
       loadSubscription(db, ctx.accountId).catch((err) => {

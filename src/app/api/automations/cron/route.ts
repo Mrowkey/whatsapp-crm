@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { resumePendingExecution } from '@/lib/automations/engine'
 import type { AutomationContext } from '@/lib/automations/engine'
+import { getAccountAccess } from '@/lib/billing/guard'
 
 /**
  * Drain due `automation_pending_executions` rows. Meant to be hit
@@ -46,6 +47,19 @@ export async function GET(request: Request) {
       .select('id')
       .maybeSingle()
     if (!claim) continue
+
+    // A workspace that has gone read-only (trial over / subscription
+    // ended) doesn't send — the same rule the inbound webhook applies
+    // to new triggers. The waiting step is closed out rather than left
+    // pending, so a "follow up in 2 days" can't fire weeks late after
+    // an upgrade.
+    if (!(await getAccountAccess(row.account_id as string)).canWrite) {
+      await admin
+        .from('automation_pending_executions')
+        .update({ status: 'failed' })
+        .eq('id', row.id)
+      continue
+    }
 
     await resumePendingExecution({
       id: row.id as string,

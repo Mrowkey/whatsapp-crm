@@ -285,6 +285,15 @@ function BillingPanelInner() {
     })();
   }, [returnedFrom, refresh, router]);
 
+  // Leaving for checkout keeps the buttons in their busy state; if the
+  // user comes back with the browser's Back button the page can be
+  // restored exactly as it was left, so clear it.
+  useEffect(() => {
+    const reset = () => setBusy(null);
+    window.addEventListener('pageshow', reset);
+    return () => window.removeEventListener('pageshow', reset);
+  }, []);
+
   async function go(endpoint: 'checkout' | 'portal', plan?: PlanId) {
     setBusy(plan ?? 'portal');
     try {

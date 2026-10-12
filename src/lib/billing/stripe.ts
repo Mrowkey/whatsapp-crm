@@ -276,13 +276,18 @@ export function createStripeProvider(config: {
             ...base,
             update: subscriptionUpdateFromStripe(object, { status: 'canceled' }),
           };
-        case 'invoice.payment_failed': {
+        case 'invoice.payment_failed':
+        case 'invoice.paid':
+        case 'invoice.payment_succeeded': {
           // Newer API versions nest the subscription under `parent`.
           const parent = asObject(asObject(object.parent)?.subscription_details);
           return {
             ...base,
             update: {
-              kind: 'payment_failed',
+              kind:
+                type === 'invoice.payment_failed'
+                  ? 'payment_failed'
+                  : 'payment_succeeded',
               customerId: idOf(object.customer),
               subscriptionId: idOf(object.subscription) ?? idOf(parent?.subscription),
             },

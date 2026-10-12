@@ -110,6 +110,27 @@ async function applyUpdate(
     return 'applied';
   }
 
+  if (update.kind === 'payment_succeeded') {
+    // The mirror of the above: a paid invoice lifts "payment failed".
+    // Nothing else — which plan and whether it's live is the
+    // subscription events' job.
+    if (
+      !existing ||
+      existing.status !== 'past_due' ||
+      (update.subscriptionId &&
+        existing.provider_subscription_id &&
+        update.subscriptionId !== existing.provider_subscription_id)
+    ) {
+      return 'ignored';
+    }
+    const { error } = await db
+      .from('account_subscriptions')
+      .update({ status: 'active', provider_event_at: eventAt })
+      .eq('account_id', accountId);
+    if (error) throw new Error(`account_subscriptions update failed: ${error.message}`);
+    return 'applied';
+  }
+
   // A first payment that hasn't gone through yet — not a state change.
   if (!update.status) return 'ignored';
 

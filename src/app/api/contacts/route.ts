@@ -8,7 +8,7 @@
 // (migration 022) behave exactly as before.
 //
 // Body:     { "contacts": [{ phone, name?, email?, company?, opted_in? }] }  (1..100)
-// Success:  201 { "contacts": [{ "id": "…" }] } — same order as the input
+// Success:  201 { "contacts": [<contact row>] } — same order as the input
 // Failure:  { "error": "…", "code": "…" }
 //   402 — plan limit reached or workspace read-only (billing codes)
 //   409 — code "23505": a phone already exists (nothing was inserted)
@@ -23,6 +23,10 @@ import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { requireWithinLimit } from "@/lib/billing/guard";
 
 const MAX_BATCH = 100;
+
+// Generous caps — these exist to keep junk out of the table, not to
+// validate. Phone format is checked by the callers (E.164) as before.
+const MAX_LEN = { phone: 32, name: 200, email: 320, company: 200 } as const;
 
 function optionalText(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -53,13 +57,27 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
+      const name = optionalText(raw.name);
+      const email = optionalText(raw.email);
+      const company = optionalText(raw.company);
+      if (
+        phone.length > MAX_LEN.phone ||
+        (name?.length ?? 0) > MAX_LEN.name ||
+        (email?.length ?? 0) > MAX_LEN.email ||
+        (company?.length ?? 0) > MAX_LEN.company
+      ) {
+        return NextResponse.json(
+          { error: "A contact field is too long" },
+          { status: 400 },
+        );
+      }
       rows.push({
         user_id: ctx.userId,
         account_id: ctx.accountId,
         phone,
-        name: optionalText(raw.name),
-        email: optionalText(raw.email),
-        company: optionalText(raw.company),
+        name,
+        email,
+        company,
         // Left to the column default unless the caller states consent.
         ...(typeof raw.opted_in === "boolean" ? { opted_in: raw.opted_in } : {}),
       });
@@ -70,7 +88,7 @@ export async function POST(request: Request) {
     const { data, error } = await ctx.supabase
       .from("contacts")
       .insert(rows)
-      .select("id");
+      .select("*");
 
     if (error || !data) {
       const duplicate = error?.code === "23505";
@@ -88,10 +106,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(
-      { contacts: data.map((row) => ({ id: row.id as string })) },
-      { status: 201 },
-    );
+    return NextResponse.json({ contacts: data }, { status: 201 });
   } catch (err) {
     return toErrorResponse(err);
   }
